@@ -7,7 +7,7 @@ from pydantic import BaseModel
 import asyncio
 import logging
 from datetime import datetime
-
+from contextlib import asynccontextmanager
 # Import our modules
 try:
     from models import (
@@ -28,10 +28,32 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize and cleanup services using lifespan context"""
+    logger.info("Starting Tax Filing Backend API...")
+
+    if services_available:
+        try:
+            await document_parser.initialize()
+            await chatbot.initialize()
+            logger.info("Services initialized successfully")
+        except Exception as e:
+            logger.error(f"Service initialization error: {e}")
+
+    logger.info("API is ready!")
+
+    # Everything after yield runs on shutdown
+    yield
+
+    logger.info("Shutting down Tax Filing Backend API...")
+
 app = FastAPI(
     title="Tax Filing Backend API",
     description="Comprehensive tax filing system with document parsing, tax calculation, and AI chatbot powered by Groq",
-    version="1.0.0"
+    version="1.0.0",
+    lifepan=lifespan
 )
 
 # CORS middleware
@@ -52,26 +74,6 @@ try:
 except Exception as e:
     logger.warning(f"Services initialization failed: {e}")
     services_available = False
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize services on startup"""
-    logger.info("Starting Tax Filing Backend API...")
-
-    if services_available:
-        try:
-            await document_parser.initialize()
-            await chatbot.initialize()
-            logger.info("Services initialized successfully")
-        except Exception as e:
-            logger.error(f"Service initialization error: {e}")
-
-    logger.info("API is ready!")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown"""
-    logger.info("Shutting down Tax Filing Backend API...")
 
 @app.get("/")
 async def root():

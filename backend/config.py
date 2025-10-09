@@ -21,9 +21,9 @@ class Settings(BaseSettings):
     # Available Groq models: llama2-70b-4096, mixtral-8x7b-32768, gemma-7b-it
     MAX_TOKENS: int = int(os.getenv("MAX_TOKENS", "1024"))
 
-    # Fallback OpenAI settings (optional, for compatibility)
-    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
-    OPENAI_MODEL: str = "gpt-3.5-turbo"
+    # # Fallback OpenAI settings (optional, for compatibility)
+    # OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    # OPENAI_MODEL: str = "gpt-3.5-turbo"
 
     # Vector database settings
     VECTOR_DB_TYPE: str = "faiss"  # Options: faiss, chroma, pinecone
