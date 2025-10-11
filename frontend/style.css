@@ -775,3 +775,38 @@ grid-template-columns: 1fr;
 grid-template-columns: 1fr;
 }
 }
+
+/* --- CHART STYLES --- */
+
+.chart-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Two equal columns */
+    gap: var(--space-24);
+    align-items: center;
+}
+
+.chart-container {
+    text-align: center;
+    position: relative;
+    height: 250px; 
+}
+
+.chart-container h4 {
+    margin-bottom: var(--space-8);
+    font-size: var(--font-size-base);
+    color: var(--color-text-secondary);
+    font-weight: var(--font-weight-medium);
+}
+
+/* ADD THIS NEW RULE FOR BAR CHARTS */
+.chart-container-bar {
+    position: relative;
+    height: 280px; /* Controls the height of the bar charts */
+    width: 100%;
+}
+
+@media (max-width: 768px) {
+    .chart-grid {
+        grid-template-columns: 1fr; /* Stack on top of each other */
+    }
+}

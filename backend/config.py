@@ -1,7 +1,6 @@
 import os
 from typing import List, Dict, Any
-from pydantic import BaseSettings
-
+from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     """Application settings with Groq integration"""
 
@@ -17,7 +16,8 @@ class Settings(BaseSettings):
 
     # Groq API settings (Primary AI provider)
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
-    GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama2-70b-4096")
+    print(GROQ_API_KEY)
+    GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
     # Available Groq models: llama2-70b-4096, mixtral-8x7b-32768, gemma-7b-it
     MAX_TOKENS: int = int(os.getenv("MAX_TOKENS", "1024"))
 

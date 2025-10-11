@@ -22,8 +22,8 @@ except ImportError:
 
 # Import models and config
 try:
-    from models import ChatbotRequest, ChatbotResponse, FinancialData
-    from config import settings, TAX_KNOWLEDGE_BASE
+    from ..models import ChatbotRequest, ChatbotResponse, FinancialData
+    from ..config import settings, TAX_KNOWLEDGE_BASE
 except ImportError:
     print("Local imports not available. Using fallback configuration.")
     settings = None
@@ -57,6 +57,7 @@ class ChatbotService:
         """Initialize chatbot components with Groq and Llama model"""
         try:
             groq_api_key = getattr(settings, 'GROQ_API_KEY', None) if settings else None
+            print(groq_api_key)
 
             if LANGCHAIN_AVAILABLE and groq_api_key:
                 # Initialize Groq with Llama model

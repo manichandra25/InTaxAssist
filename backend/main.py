@@ -8,17 +8,19 @@ import asyncio
 import logging
 from datetime import datetime
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv
+load_dotenv()
 # Import our modules
 try:
-    from models import (
+    from .models import (
         TaxCalculationRequest, TaxCalculationResponse, 
         ChatbotRequest, ChatbotResponse, DocumentParseResponse,
         FinancialData, TaxRegimeComparison
     )
-    from services.document_parser import DocumentParserService
-    from services.tax_calculator import TaxCalculatorService
-    from services.chatbot import ChatbotService
-    from config import settings
+    from .services.document_parser import DocumentParserService
+    from .services.tax_calculator import TaxCalculatorService
+    from .services.chatbot import ChatbotService
+    from .config import settings
 except ImportError as e:
     print(f"Import error: {e}")
     print("Using fallback imports")
@@ -145,7 +147,7 @@ async def upload_and_parse_document(
             )
         else:
             # Fallback response
-            from models import FinancialData, DocumentParseResponse
+            from .models import FinancialData, DocumentParseResponse
             parsed_data = DocumentParseResponse(
                 success=True,
                 filename=file.filename,
@@ -176,7 +178,7 @@ async def calculate_tax(request: Dict[str, Any]):
         assessment_year = request.get("assessment_year", "2024-25")
 
         if services_available:
-            from models import FinancialData
+            from .models import FinancialData
             fin_data = FinancialData(**financial_data)
             result = tax_calculator.calculate_comprehensive_tax(
                 financial_data=fin_data,

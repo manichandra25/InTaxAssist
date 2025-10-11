@@ -8,14 +8,15 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
 </head>
 <body>
-    <!-- Theme Toggle -->
     <button id="themeToggle" class="theme-toggle" aria-label="Toggle theme">
         <span class="theme-icon">🌙</span>
     </button>
 
-    <!-- Loading Overlay -->
     <div id="loadingOverlay" class="loading-overlay hidden">
         <div class="loading-spinner">
             <div class="spinner"></div>
@@ -23,12 +24,9 @@
         </div>
     </div>
 
-    <!-- Toast Notifications -->
     <div id="toastContainer" class="toast-container"></div>
 
-    <!-- Main Layout -->
     <div class="app-layout">
-        <!-- Sidebar -->
         <aside id="sidebar" class="sidebar">
             <div class="sidebar-header">
                 <div class="logo">
@@ -64,9 +62,7 @@
             </nav>
         </aside>
 
-        <!-- Main Content -->
         <main class="main-content">
-            <!-- Navbar -->
             <nav class="navbar">
                 <div class="navbar-content">
                     <div class="navbar-brand">
@@ -92,7 +88,6 @@
                 </div>
             </nav>
 
-            <!-- Dashboard Tab -->
             <div id="dashboard" class="tab-content active">
                 <div class="dashboard-header">
                     <h1>Tax Filing Dashboard</h1>
@@ -153,13 +148,14 @@
                             <h3>Tax Comparison</h3>
                         </div>
                         <div class="card__body">
-                            <canvas id="comparisonChart" width="400" height="300"></canvas>
+                             <div class="chart-container-bar">
+                                <canvas id="comparisonChart"></canvas>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Upload Tab -->
             <div id="upload" class="tab-content">
                 <div class="upload-header">
                     <h1>Upload Tax Documents</h1>
@@ -185,8 +181,7 @@
                 <div class="uploaded-files">
                     <h3>Uploaded Documents</h3>
                     <div id="fileList" class="file-list">
-                        <!-- Uploaded files will appear here -->
-                    </div>
+                        </div>
                 </div>
 
                 <div class="document-checklist">
@@ -212,7 +207,6 @@
                 </div>
             </div>
 
-            <!-- Financial Tab -->
             <div id="financial" class="tab-content">
                 <div class="financial-header">
                     <h1>Financial Summary</h1>
@@ -294,7 +288,6 @@
                 </div>
             </div>
 
-            <!-- Results Tab -->
             <div id="results" class="tab-content">
                 <div class="results-header">
                     <h1>Tax Calculation Results</h1>
@@ -321,13 +314,18 @@
                     <div class="card">
                         <div class="card__header">
                             <h3>Tax Breakdown</h3>
-                            <div class="chart-controls">
-                                <button class="toggle-btn active" data-chart="breakdown">Breakdown</button>
-                                <button class="toggle-btn" data-chart="comparison">Comparison</button>
-                            </div>
                         </div>
                         <div class="card__body">
-                            <canvas id="taxBreakdownChart" width="400" height="300"></canvas>
+                            <div class="chart-grid">
+                                <div class="chart-container">
+                                    <h4>Old Regime</h4>
+                                    <canvas id="oldRegimeBreakdownChart"></canvas>
+                                </div>
+                                <div class="chart-container">
+                                    <h4>New Regime</h4>
+                                    <canvas id="newRegimeBreakdownChart"></canvas>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -336,7 +334,9 @@
                             <h3>Year-over-Year Comparison</h3>
                         </div>
                         <div class="card__body">
-                            <canvas id="yearComparisonChart" width="400" height="300"></canvas>
+                             <div class="chart-container-bar">
+                                <canvas id="yearComparisonChart"></canvas>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -372,7 +372,6 @@
                 </div>
             </div>
 
-            <!-- Help Tab -->
             <div id="help" class="tab-content">
                 <div class="help-header">
                     <h1>Help Center & Chat</h1>
@@ -441,7 +440,6 @@
         </main>
     </div>
 
-    <!-- Modals -->
     <div id="exportModal" class="modal hidden">
         <div class="modal-content">
             <div class="modal-header">
