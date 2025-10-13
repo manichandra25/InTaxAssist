@@ -4,13 +4,20 @@ from typing import Dict, Any, Optional, List
 import time
 import json
 from datetime import datetime
-
+import os
+from dotenv import load_dotenv
+load_dotenv()
+import sys
+print(sys.executable)
 # LangChain imports with Groq support
 try:
     from langchain_groq import ChatGroq
-    from langchain_community.embeddings import HuggingFaceEmbeddings
+    # from langchain_community.embeddings import HuggingFaceEmbeddings
+    # from sentence_transformers import SentenceTransformer
+    from langchain_huggingface import HuggingFaceEmbeddings
     from langchain_community.vectorstores import FAISS
     from langchain.chains import ConversationalRetrievalChain
+    from langchain_community.chat_message_histories import ChatMessageHistory
     from langchain.memory import ConversationBufferWindowMemory
     from langchain.schema import Document
     from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -23,7 +30,9 @@ except ImportError:
 # Import models and config
 try:
     from ..models import ChatbotRequest, ChatbotResponse, FinancialData
-    from ..config import settings, TAX_KNOWLEDGE_BASE
+    # from ..config import settings, TAX_KNOWLEDGE_BASE
+    from backend.config import settings, TAX_KNOWLEDGE_BASE
+
 except ImportError:
     print("Local imports not available. Using fallback configuration.")
     settings = None
@@ -33,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 class ChatbotService:
     """RAG-powered chatbot service for tax queries using Groq with Llama model"""
-
+    
     def __init__(self):
         self.llm = None
         self.embeddings = None
@@ -41,13 +50,15 @@ class ChatbotService:
         self.qa_chain = None
         self.memory = None
         self.text_splitter = None
-
+        self.user_sessions = {}  # Temporary session storage
         if LANGCHAIN_AVAILABLE:
             self.memory = ConversationBufferWindowMemory(
+                chat_memory=ChatMessageHistory(),
                 memory_key="chat_history",
-                return_messages=True,
-                k=10  # Keep last 10 exchanges
+                output_key='answer',
+                k=10
             )
+
             self.text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=500,
                 chunk_overlap=50
@@ -56,14 +67,23 @@ class ChatbotService:
     async def initialize(self):
         """Initialize chatbot components with Groq and Llama model"""
         try:
-            groq_api_key = getattr(settings, 'GROQ_API_KEY', None) if settings else None
-            print(groq_api_key)
+            # Get Groq API key with better error handling
+            groq_api_key = None
+            if settings:
+                groq_api_key = getattr(settings, 'GROQ_API_KEY', None)
+            
+            # Also check environment directly as fallback
+            if not groq_api_key:
+                import os
+                groq_api_key = os.getenv('GROQ_API_KEY')
+            
+            print(f"Groq API Key available: {groq_api_key}")  # Debug info
 
             if LANGCHAIN_AVAILABLE and groq_api_key:
                 # Initialize Groq with Llama model
                 self.llm = ChatGroq(
                     groq_api_key=groq_api_key,
-                    model_name=getattr(settings, 'GROQ_MODEL', 'llama2-70b-4096'),
+                    model_name=getattr(settings, 'GROQ_MODEL', 'llama-3.3-70b-versatile'),
                     temperature=getattr(settings, 'CHATBOT_TEMPERATURE', 0.7),
                     max_tokens=getattr(settings, 'MAX_TOKENS', 1024)
                 )
@@ -80,6 +100,10 @@ class ChatbotService:
 
             else:
                 logger.warning("Groq API key not available or LangChain not installed. Using fallback responses.")
+                if not groq_api_key:
+                    logger.warning("Please set GROQ_API_KEY environment variable")
+                if not LANGCHAIN_AVAILABLE:
+                    logger.warning("LangChain dependencies not installed")
 
         except Exception as e:
             logger.error(f"Error initializing chatbot: {e}")
@@ -111,6 +135,10 @@ class ChatbotService:
                 )
                 documents.append(doc)
 
+            # Add anonymized user scenarios (no real financial data)
+            scenario_docs = self._get_anonymized_user_scenarios()
+            documents.extend(scenario_docs)
+
             # Split documents into chunks
             split_docs = self.text_splitter.split_documents(documents)
 
@@ -127,7 +155,7 @@ class ChatbotService:
             return
 
         try:
-            # Create a specialized prompt template for Indian tax queries
+            # Enhanced prompt template for better handling of new questions
             system_message = SystemMessagePromptTemplate.from_template("""
             You are TaxBot, an expert Indian tax advisor chatbot powered by Groq's Llama model. 
             You specialize in Indian Income Tax laws, tax regimes, deductions, and tax planning strategies.
@@ -148,15 +176,20 @@ class ChatbotService:
             4. Consider both old and new tax regimes when relevant
             5. Provide actionable, practical advice
             6. Use a professional yet friendly tone
-            7. If unsure about something, acknowledge limitations
+            7. If you don't know the answer based on the context, use your general knowledge about Indian tax laws
             8. Focus specifically on Indian tax laws and regulations
             9. Cite relevant sections of Income Tax Act when possible
-            10. Provide follow-up questions to help users explore topics deeper
+            10. If the question is not tax-related, politely redirect to tax topics
+            11. For complex scenarios, suggest consulting a tax professional
+            12. Always be helpful and provide the best possible answer based on available information
 
             Current Context from Knowledge Base:
             {context}
 
+
+
             Remember: You are powered by Groq's ultra-fast inference for real-time tax assistance.
+            If the context doesn't fully answer the question, use your comprehensive knowledge of Indian taxation.
             """)
 
             human_message = HumanMessagePromptTemplate.from_template("{question}")
@@ -166,11 +199,17 @@ class ChatbotService:
             # Create conversational retrieval chain with Groq
             self.qa_chain = ConversationalRetrievalChain.from_llm(
                 llm=self.llm,
-                retriever=self.vectorstore.as_retriever(search_kwargs={"k": 3}),
+                retriever=self.vectorstore.as_retriever(
+                    search_kwargs={
+                        "k": 5,  # Increased from 3 to 5 for better coverage
+                        "score_threshold": 0.0  # Lower threshold for broader matching
+                    }
+                ),
                 memory=self.memory,
                 return_source_documents=True,
-                verbose=False,
-                combine_docs_chain_kwargs={"prompt": chat_prompt}
+                verbose=getattr(settings, 'DEBUG', False),
+                combine_docs_chain_kwargs={"prompt": chat_prompt},
+                max_tokens_limit=4000  # Increased token limit for comprehensive answers
             )
 
             logger.info("QA chain setup completed with enhanced prompts")
@@ -182,27 +221,60 @@ class ChatbotService:
         self, 
         query: str, 
         context: Optional[Dict[str, Any]] = None,
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
+        session_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """Process user query and return comprehensive response"""
 
         start_time = time.time()
 
         try:
-            # Enhance query with context if provided
-            enhanced_query = self._enhance_query_with_context(query, context)
+            # Check if query is tax-related
+            if not self._is_tax_related_query(query):
+                return {
+                    "response": "I specialize in Indian tax-related questions. I can help you with tax regimes, deductions, ITR filing, tax-saving investments, and other tax-related topics. Could you please ask a tax-related question?",
+                    "confidence": 0.9,
+                    "sources": ["Tax Assistant Scope"],
+                    "follow_up_questions": [
+                        "What documents do I need for tax filing?",
+                        "Should I choose old or new tax regime?",
+                        "How can I save tax under Section 80C?"
+                    ],
+                    "response_time": time.time() - start_time
+                }
+
+            # Get user context for this session (temporary, not stored in vector DB)
+            user_context = self._get_user_context_for_session(user_id, session_id, context)
 
             if LANGCHAIN_AVAILABLE and self.qa_chain:
-                # Use LangChain RAG with Groq for response
-                result = await asyncio.to_thread(
-                    self.qa_chain,
-                    {"question": enhanced_query}
-                )
+                try:
+                    # Enhance query with temporary context
+                    enhanced_query = self._enhance_query_with_context(query, user_context)
+                    
+                    # Use LangChain RAG with Groq for response
+                    result = await asyncio.to_thread(
+                        self.qa_chain,
+                        {
+                            "question": enhanced_query,
+                            # "user_context": user_context.get("context_description", "")
+                        }
+                    )
 
-                response_text = result["answer"]
-                source_docs = result.get("source_documents", [])
-                sources = [doc.metadata.get("topic", "Unknown") for doc in source_docs[:3]]
-                confidence = self._calculate_response_confidence(result)
+                    response_text = result["answer"]
+                    source_docs = result.get("source_documents", [])
+                    sources = [doc.metadata.get("topic", "Unknown") for doc in source_docs[:3]]
+                    confidence = self._calculate_response_confidence(result, query)
+
+                    # If confidence is low but we have a response, still use it
+                    if confidence < 0.3 and response_text.strip():
+                        confidence = 0.5  # Minimum confidence for LLM responses
+
+                except Exception as e:
+                    logger.warning(f"LLM processing failed: {e}, using fallback")
+                    response_data = self._get_enhanced_fallback_response(query)
+                    response_text = response_data["response"]
+                    sources = response_data["sources"]
+                    confidence = response_data["confidence"]
 
             else:
                 # Fallback to rule-based responses
@@ -212,7 +284,7 @@ class ChatbotService:
                 confidence = response_data["confidence"]
 
             # Generate intelligent follow-up questions
-            follow_up_questions = self._generate_intelligent_follow_ups(query, context, response_text)
+            follow_up_questions = self._generate_intelligent_follow_ups(query, user_context, response_text)
 
             processing_time = time.time() - start_time
 
@@ -228,7 +300,7 @@ class ChatbotService:
             logger.error(f"Error processing query: {e}")
 
             return {
-                "response": "I apologize, but I encountered an error processing your question. This might be due to a temporary issue with the AI service. Please try rephrasing your query or ask a simpler question.",
+                "response": "I apologize, but I encountered an error processing your tax question. Please try rephrasing your query or ask about specific tax topics like deductions, regimes, or filing procedures.",
                 "confidence": 0.0,
                 "sources": [],
                 "follow_up_questions": [
@@ -239,30 +311,87 @@ class ChatbotService:
                 "response_time": time.time() - start_time
             }
 
-    def _enhance_query_with_context(self, query: str, context: Optional[Dict[str, Any]]) -> str:
-        """Enhance query with user context for better responses"""
+    def _get_user_context_for_session(
+        self, 
+        user_id: Optional[str], 
+        session_id: Optional[str], 
+        context: Optional[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """Get user context for current session without storing in vector DB"""
+        user_context = {
+            "has_financial_data": False,
+            "context_description": "",
+            "income_level": "unknown",
+            "regime_preference": "unknown"
+        }
+
         if not context:
+            return user_context
+
+        # Handle financial data context
+        if "financial_data" in context:
+            financial_info = context["financial_data"]
+            user_context["has_financial_data"] = True
+            user_context["financial_data"] = financial_info
+            
+            # Create a descriptive context for the LLM (without raw numbers)
+            income = financial_info.get('total_income', 0)
+            if income > 0:
+                if income > 1000000:
+                    income_level = "high income"
+                elif income > 500000:
+                    income_level = "medium income"
+                else:
+                    income_level = "lower income"
+                
+                user_context["income_level"] = income_level
+                user_context["context_description"] = f"User has {income_level} (₹{income:,.0f} annual)"
+                
+                # Add investment context
+                if financial_info.get('section_80c', 0) > 0:
+                    user_context["context_description"] += f", has Section 80C investments"
+                if financial_info.get('section_80d', 0) > 0:
+                    user_context["context_description"] += f", has health insurance"
+                if financial_info.get('section_24', 0) > 0:
+                    user_context["context_description"] += f", has home loan"
+
+        # Handle previous calculation context
+        if "last_calculation" in context:
+            calc = context["last_calculation"]
+            regime = calc.get('recommended_regime', 'unknown')
+            user_context["regime_preference"] = regime
+            if user_context["context_description"]:
+                user_context["context_description"] += f", previously {regime} regime was recommended"
+            else:
+                user_context["context_description"] = f"Previously {regime} regime was recommended"
+
+        return user_context
+
+    def _enhance_query_with_context(self, query: str, user_context: Dict[str, Any]) -> str:
+        """Enhance query with temporary user context for better responses"""
+        if not user_context.get("has_financial_data"):
             return query
 
         enhanced_query = query
-
-        # Add financial context if available
-        if "financial_data" in context:
-            financial_info = context["financial_data"]
-            enhanced_query += f"\n\nUser's financial context: Total income around ₹{financial_info.get('total_income', 0):,.0f}"
-
-            # Add deduction context
-            if financial_info.get('section_80c', 0) > 0:
-                enhanced_query += f", 80C investments: ₹{financial_info.get('section_80c', 0):,.0f}"
-
-        # Add previous calculation context
-        if "last_calculation" in context:
-            calc = context["last_calculation"]
-            regime = calc.get('recommended_regime', 'Unknown')
-            tax_amount = calc.get('savings_amount', 0)
-            enhanced_query += f"\n\nPrevious tax calculation: {regime} regime recommended with ₹{tax_amount:,.0f} potential savings"
+        
+        # Add context description to query
+        if user_context.get("context_description"):
+            enhanced_query += f"\n\nContext: {user_context['context_description']}"
 
         return enhanced_query
+
+    def _is_tax_related_query(self, query: str) -> bool:
+        """Check if the query is tax-related"""
+        tax_keywords = [
+            'tax', 'income', 'deduction', 'regime', 'itr', 'tds', 'hra', 
+            '80c', '80d', 'section', 'investment', 'salary', 'filing',
+            'saving', 'exemption', 'refund', 'pan', 'aadhar', 'form16',
+            'income tax', 'tax planning', 'tax saving', 'tax regime',
+            'capital gain', 'nri', 'house rent', 'home loan', 'insurance'
+        ]
+        
+        query_lower = query.lower()
+        return any(keyword in query_lower for keyword in tax_keywords)
 
     def _get_enhanced_fallback_response(self, query: str) -> Dict[str, Any]:
         """Provide enhanced fallback responses when Groq LLM is not available"""
@@ -414,6 +543,56 @@ class ChatbotService:
                 "confidence": 0.8
             },
 
+            "capital gain": {
+                "response": """**Capital Gains Tax in India:**
+
+**Types of Capital Gains:**
+• **Short Term Capital Gains (STCG)**: Assets held for less than specified period
+• **Long Term Capital Gains (LTCG)**: Assets held for more than specified period
+
+**Holding Periods:**
+• Equity Shares/Mutual Funds: 12 months
+• Real Estate: 24 months
+• Other assets: 36 months
+
+**Tax Rates:**
+• **STCG on Equity**: 15%
+• **LTCG on Equity**: 10% on gains above ₹1 lakh
+• **LTCG on Debt**: 20% with indexation
+• **Real Estate**: 20% with indexation for LTCG
+
+**Exemptions:**
+• Section 54: Reinvestment in residential property
+• Section 54EC: Investment in specified bonds
+• Section 54F: Investment in one residential house""",
+                "sources": ["Capital Gains Guide", "Investment Taxation"],
+                "confidence": 0.8
+            },
+
+            "nri": {
+                "response": """**NRI Taxation in India:**
+
+**Residential Status:**
+• **Resident**: 182 days in India or 60 days + 365 days in preceding 4 years
+• **NRI**: Does not meet resident criteria
+• **RNOR** (Resident but Not Ordinarily Resident): Special category
+
+**Tax Implications for NRIs:**
+• **Income earned in India**: Fully taxable (rent, capital gains, etc.)
+• **Income outside India**: Generally not taxable
+• **Special rates**: Some incomes have different tax rates for NRIs
+
+**NRI-Specific Provisions:**
+• TDS on rental income: 31.2%
+• TDS on professional fees: 31.2%
+• Capital gains tax on property sale
+• NRE/NRO account taxation
+
+**DTAA Benefits**: Double Taxation Avoidance Agreements may provide relief.""",
+                "sources": ["NRI Taxation Guide", "Residential Status"],
+                "confidence": 0.8
+            },
+
             "groq": {
                 "response": """This tax assistant is powered by **Groq's cutting-edge AI infrastructure**:
 
@@ -470,27 +649,42 @@ Feel free to ask specific questions about your tax situation!""",
             "confidence": 0.7
         }
 
-    def _calculate_response_confidence(self, result: Dict[str, Any]) -> float:
+    def _calculate_response_confidence(self, result: Dict[str, Any], query: str) -> float:
         """Calculate confidence score for Groq LLM response"""
-
+        
         source_docs = result.get("source_documents", [])
         response = result.get("answer", "")
+        
+        if not response or response.strip() == "":
+            return 0.1
 
-        # Confidence factors
-        source_confidence = min(len(source_docs) / 3, 1.0)  # Max 3 sources
-        length_confidence = min(len(response) / 300, 1.0)  # Reasonable response length
-
-        # Check for tax-specific terms and accuracy indicators
-        tax_terms = ["section", "deduction", "regime", "tax", "₹", "income", "exemption", "investment"]
+        # Base confidence factors
+        source_confidence = min(len(source_docs) / 5, 1.0)  # Max 5 sources
+        length_confidence = min(len(response) / 200, 1.0)  # Reasonable response length
+        
+        # Check for tax-specific terms and relevance
+        tax_terms = ["section", "deduction", "regime", "tax", "₹", "income", 
+                     "exemption", "investment", "filing", "salary", "tds"]
         term_count = sum(1 for term in tax_terms if term.lower() in response.lower())
         term_confidence = min(term_count / len(tax_terms), 1.0)
-
-        # Groq model boost (higher confidence with AI)
-        groq_boost = 0.1 if self.qa_chain else 0
-
-        overall_confidence = (source_confidence * 0.3) + (length_confidence * 0.2) + (term_confidence * 0.4) + groq_boost
-
-        return min(max(overall_confidence, 0.2), 0.95)
+        
+        # Query relevance check
+        query_terms = query.lower().split()
+        relevant_terms = sum(1 for term in query_terms if term in response.lower())
+        query_relevance = min(relevant_terms / max(len(query_terms), 1), 1.0)
+        
+        # Groq model boost
+        groq_boost = 0.2 if self.qa_chain else 0
+        
+        overall_confidence = (
+            source_confidence * 0.2 + 
+            length_confidence * 0.2 + 
+            term_confidence * 0.3 + 
+            query_relevance * 0.3 + 
+            groq_boost
+        )
+        
+        return min(max(overall_confidence, 0.3), 0.95)
 
     def _generate_intelligent_follow_ups(
         self, 
@@ -540,15 +734,32 @@ Feel free to ask specific questions about your tax situation!""",
                 "How much should I invest in tax-saving instruments?"
             ])
 
-        # Add context-based follow-ups
-        if context and "financial_data" in context:
-            financial_data = context["financial_data"]
-            income = financial_data.get("total_income", 0)
+        elif "capital gain" in query_lower or "capital gain" in response_lower:
+            follow_ups.extend([
+                "What is the difference between STCG and LTCG?",
+                "How can I save tax on property sale?",
+                "What are the exemptions available for capital gains?"
+            ])
 
-            if income > 1000000:  # High income
+        elif "nri" in query_lower or "nri" in response_lower:
+            follow_ups.extend([
+                "How is residential status determined for NRIs?",
+                "What income is taxable for NRIs in India?",
+                "How can NRIs reduce their tax liability?"
+            ])
+
+        # Add context-based follow-ups
+        if context and context.get("has_financial_data"):
+            income_level = context.get("income_level", "unknown")
+            regime_pref = context.get("regime_preference", "unknown")
+
+            if income_level == "high income":
                 follow_ups.append("What additional tax planning strategies work for high-income individuals?")
-            elif income < 500000:  # Lower income
+            elif income_level == "lower income":
                 follow_ups.append("Are there any special tax benefits for lower income groups?")
+
+            if regime_pref != "unknown":
+                follow_ups.append(f"How can I optimize my taxes under the {regime_pref} regime?")
 
         # Default follow-ups if none match
         if not follow_ups:
@@ -602,45 +813,101 @@ Feel free to ask specific questions about your tax situation!""",
             {
                 "question": "What is the benefit of NPS investment for tax saving?",
                 "content": "NPS offers triple tax benefits: 80CCD(1) up to 10% of salary within 80C limit, additional 80CCD(1B) up to ₹50,000, and employer contribution 80CCD(2) without limit. Total tax benefit can reach ₹2 lakh annually."
+            },
+            {
+                "question": "How are capital gains taxed in India?",
+                "content": "Capital gains are taxed based on holding period: STCG (short-term) for assets held less than specified period, LTCG (long-term) for longer periods. Equity: 12 months threshold, 15% STCG, 10% LTCG above ₹1L. Real estate: 24 months, 20% LTCG with indexation."
+            },
+            {
+                "question": "What is the tax treatment for NRIs?",
+                "content": "NRIs are taxed only on India-sourced income. Different TDS rates apply (31.2% on rent, professional fees). Residential status determined by physical presence in India. DTAA benefits available for double taxation relief."
             }
         ]
 
-    async def add_user_context(self, user_id: str, financial_data: Dict[str, Any]):
-        """Add user-specific financial context for personalized responses"""
-        try:
-            if not LANGCHAIN_AVAILABLE or not self.vectorstore:
-                return
+    def _get_anonymized_user_scenarios(self) -> List[Document]:
+        """Create anonymized user scenarios for better contextual understanding"""
+        scenarios = [
+            {
+                "content": """User Scenario: Young Professional (Age 25-35)
+Income Range: ₹6-12 lakhs annually
+Common Tax Situations:
+- Basic salary with HRA component
+- Limited 80C investments (EPF, some insurance)
+- Minimal home loan or other deductions
+- Often benefits from new tax regime
+- Standard deduction of ₹50,000 applies
 
-            # Create user-specific document with financial profile
-            context_content = f"""
-            User Financial Profile (ID: {user_id}):
-            - Total Annual Income: ₹{financial_data.get('total_income', 0):,.0f}
-            - Basic Salary: ₹{financial_data.get('basic_salary', 0):,.0f}
-            - HRA Component: ₹{financial_data.get('hra', 0):,.0f}
-            - Section 80C Investments: ₹{financial_data.get('section_80c', 0):,.0f}
-            - Section 80D Premiums: ₹{financial_data.get('section_80d', 0):,.0f}
-            - Home Loan Interest (24): ₹{financial_data.get('section_24', 0):,.0f}
-            - TDS Deducted: ₹{financial_data.get('tds_deducted', 0):,.0f}
+Typical Questions:
+- Should I choose old or new regime?
+- How to maximize 80C benefits?
+- HRA calculation for rented accommodation""",
+                "metadata": {"topic": "User Scenario", "type": "young_professional", "source": "scenario"}
+            },
+            {
+                "content": """User Scenario: Mid-Career Professional (Age 35-50)
+Income Range: ₹15-30 lakhs annually
+Common Tax Situations:
+- Higher basic salary and HRA
+- Substantial 80C investments (EPF, PPF, ELSS, insurance)
+- Home loan interest deductions under Section 24
+- Health insurance premiums under 80D
+- Often benefits from old tax regime
+- Capital gains from investments
 
-            Profile Analysis:
-            - Income Category: {"High" if financial_data.get('total_income', 0) > 1000000 else "Medium" if financial_data.get('total_income', 0) > 500000 else "Lower"}
-            - 80C Utilization: {(financial_data.get('section_80c', 0) / 150000 * 100):.1f}% of limit utilized
-            - Tax Planning Status: {"Advanced" if financial_data.get('section_80c', 0) > 100000 else "Basic"}
-            """
+Typical Questions:
+- Old vs new regime optimization
+- Home loan + HRA combination
+- Tax-saving investment strategies
+- Capital gains planning""",
+                "metadata": {"topic": "User Scenario", "type": "mid_career", "source": "scenario"}
+            },
+            {
+                "content": """User Scenario: Senior Professional/NRI (Age 50+)
+Income Range: ₹25+ lakhs annually
+Common Tax Situations:
+- Multiple income sources
+- Complex investment portfolio
+- Senior citizen health insurance benefits
+- Capital gains from property/equity
+- NRI taxation considerations
+- Retirement planning focus
 
-            user_doc = Document(
-                page_content=context_content,
-                metadata={
-                    "user_id": user_id, 
-                    "type": "financial_profile",
-                    "income_level": financial_data.get('total_income', 0),
-                    "timestamp": datetime.now().isoformat()
-                }
-            )
+Typical Questions:
+- Tax-efficient retirement planning
+- NRI taxation rules
+- Senior citizen deductions
+- Capital gains exemptions
+- Estate planning considerations""",
+                "metadata": {"topic": "User Scenario", "type": "senior_professional", "source": "scenario"}
+            }
+        ]
+        
+        return [Document(page_content=scenario["content"], metadata=scenario["metadata"]) for scenario in scenarios]
 
-            # Add to vector store for personalized responses
-            self.vectorstore.add_documents([user_doc])
-            logger.info(f"Added personalized financial context for user {user_id}")
+    # Removed the problematic add_user_context method that stored private data in vector store
 
-        except Exception as e:
-            logger.error(f"Error adding user context: {e}")
+    def update_user_session(self, user_id: str, session_id: str, financial_data: Dict[str, Any]):
+        """Update temporary user session data (not stored in vector DB)"""
+        session_key = f"{user_id}_{session_id}" if user_id and session_id else "anonymous"
+        
+        # Store only for current session (you might want to add expiration in production)
+        self.user_sessions[session_key] = {
+            "financial_data": financial_data,
+            "last_updated": datetime.now(),
+            "user_id": user_id,
+            "session_id": session_id
+        }
+        
+        logger.info(f"Updated session data for {session_key}")
+
+    def get_user_session(self, user_id: str, session_id: str) -> Optional[Dict[str, Any]]:
+        """Get temporary user session data"""
+        session_key = f"{user_id}_{session_id}" if user_id and session_id else "anonymous"
+        return self.user_sessions.get(session_key)
+
+    def clear_user_session(self, user_id: str, session_id: str):
+        """Clear temporary user session data"""
+        session_key = f"{user_id}_{session_id}" if user_id and session_id else "anonymous"
+        if session_key in self.user_sessions:
+            del self.user_sessions[session_key]
+            logger.info(f"Cleared session data for {session_key}")

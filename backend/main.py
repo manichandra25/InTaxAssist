@@ -1,3 +1,5 @@
+from dotenv import load_dotenv
+load_dotenv()
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -8,8 +10,6 @@ import asyncio
 import logging
 from datetime import datetime
 from contextlib import asynccontextmanager
-from dotenv import load_dotenv
-load_dotenv()
 # Import our modules
 try:
     from .models import (
@@ -35,8 +35,9 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Initialize and cleanup services using lifespan context"""
     logger.info("Starting Tax Filing Backend API...")
-
+    # print(services_available)
     if services_available:
+        print("--- EXECUTING LIFESPAN STARTUP ---")
         try:
             await document_parser.initialize()
             await chatbot.initialize()
@@ -55,7 +56,7 @@ app = FastAPI(
     title="Tax Filing Backend API",
     description="Comprehensive tax filing system with document parsing, tax calculation, and AI chatbot powered by Groq",
     version="1.0.0",
-    lifepan=lifespan
+    lifespan=lifespan
 )
 
 # CORS middleware

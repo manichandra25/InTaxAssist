@@ -1,6 +1,9 @@
 import os
 from typing import List, Dict, Any
 from pydantic_settings import BaseSettings
+from pydantic import ConfigDict
+from dotenv import load_dotenv
+load_dotenv()
 class Settings(BaseSettings):
     """Application settings with Groq integration"""
 
@@ -60,9 +63,10 @@ class Settings(BaseSettings):
     # Logging settings
     LOG_LEVEL: str = "INFO"
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    model_config = ConfigDict(
+        env_file=".env",
+        case_sensitive=True
+    )
 
 # Tax slab configurations for different assessment years
 TAX_SLABS = {
