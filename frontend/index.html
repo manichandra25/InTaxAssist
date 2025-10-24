@@ -3,14 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive Tax Filing System</title>
+    <title>InTaxAssist - Smart Tax Filing</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
-
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-
 </head>
 <body>
     <button id="themeToggle" class="theme-toggle" aria-label="Toggle theme">
@@ -31,7 +29,7 @@
             <div class="sidebar-header">
                 <div class="logo">
                     <span class="icon" data-lucide="calculator"></span>
-                    <h3>TaxPro</h3>
+                    <h3>InTaxAssist</h3>
                 </div>
                 <button id="sidebarToggle" class="sidebar-toggle">
                     <span class="icon" data-lucide="menu"></span>
@@ -66,7 +64,7 @@
             <nav class="navbar">
                 <div class="navbar-content">
                     <div class="navbar-brand">
-                        <h2>TaxPro Interactive</h2>
+                        <h2>Welcome to InTaxAssist: Smart Tax Filing and Advisory System</h2>
                     </div>
                     <div class="navbar-actions">
                         <button class="btn btn--outline btn--sm" id="exportBtn">
@@ -77,12 +75,12 @@
                             <button class="btn btn--secondary btn--sm" id="profileBtn">
                                 <span class="icon" data-lucide="user"></span>
                             </button>
-                            <div class="dropdown-menu" id="profileDropdown">
+                            <!-- <div class="dropdown-menu" id="profileDropdown">
                                 <a href="#" class="dropdown-item">Profile Settings</a>
                                 <a href="#" class="dropdown-item">Tax History</a>
                                 <hr class="dropdown-divider">
                                 <a href="#" class="dropdown-item">Logout</a>
-                            </div>
+                            </div> -->
                         </div>
                     </div>
                 </div>
@@ -91,7 +89,34 @@
             <div id="dashboard" class="tab-content active">
                 <div class="dashboard-header">
                     <h1>Tax Filing Dashboard</h1>
-                    <p>Complete your tax filing with our interactive system</p>
+                    <!-- <p>Welcome to InTaxAssist - Smart Tax Filing and Advisory System</p> -->
+                </div>
+
+                <div class="card countdown-timer-card">
+                    <div class="card__body">
+                        <h4>Tax Filing Deadline Countdown (July 31, 2026)</h4>
+                        <div id="countdownTimer" class="countdown-timer">
+                            <div class="timer-segment">
+                                <span id="days">00</span>
+                                <small>Days</small>
+                            </div>
+                            <div class="timer-separator">:</div>
+                            <div class="timer-segment">
+                                <span id="hours">00</span>
+                                <small>Hours</small>
+                            </div>
+                            <div class="timer-separator">:</div>
+                            <div class="timer-segment">
+                                <span id="minutes">00</span>
+                                <small>Minutes</small>
+                            </div>
+                            <div class="timer-separator">:</div>
+                            <div class="timer-segment">
+                                <span id="seconds">00</span>
+                                <small>Seconds</small>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="stats-grid">
@@ -126,7 +151,7 @@
                 </div>
 
                 <div class="dashboard-cards">
-                    <div class="card">
+                    <!-- <div class="card">
                         <div class="card__header">
                             <h3>Recent Activity</h3>
                         </div>
@@ -135,17 +160,17 @@
                                 <div class="activity-item">
                                     <span class="activity-icon" data-lucide="upload"></span>
                                     <div class="activity-content">
-                                        <p>Welcome to TaxPro Interactive</p>
+                                        <p>Welcome to InTaxAssist</p>
                                         <small>Start by uploading your documents</small>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
+                    </div> -->
 
                     <div class="card">
                         <div class="card__header">
-                            <h3>Tax Comparison</h3>
+                            <h3>Tax Comparison (Trend)</h3>
                         </div>
                         <div class="card__body">
                              <div class="chart-container-bar">
@@ -181,7 +206,14 @@
                 <div class="uploaded-files">
                     <h3>Uploaded Documents</h3>
                     <div id="fileList" class="file-list">
-                        </div>
+                    </div>
+                </div>
+
+                <div class="form-actions text-center" style="margin: var(--space-24) 0;">
+                    <button id="continueToFinancials" class="btn btn--primary btn--lg">
+                        Continue to Financials
+                        <span class="icon" data-lucide="arrow-right" style="margin-left: 8px;"></span>
+                    </button>
                 </div>
 
                 <div class="document-checklist">
@@ -328,10 +360,9 @@
                             </div>
                         </div>
                     </div>
-
                     <div class="card">
                         <div class="card__header">
-                            <h3>Year-over-Year Comparison</h3>
+                            <h3>Year-over-Year Trend</h3>
                         </div>
                         <div class="card__body">
                              <div class="chart-container-bar">
@@ -342,32 +373,51 @@
                 </div>
 
                 <div class="tax-savings">
-                    <h3>Tax Saving Suggestions <span class="count">3 opportunities</span></h3>
+                    <h3>Tax Saving Suggestions <span class="count">0 opportunities</span></h3>
                     <div class="savings-list">
-                        <div class="saving-item">
-                            <div class="saving-icon" data-lucide="trending-up"></div>
-                            <div class="saving-content">
-                                <h4>Increase 80C Investment</h4>
+                        
+                        <div class="expandable-card saving-item">
+                            <div class="expandable-header">
+                                <div class="saving-header-content">
+                                    <span class="saving-icon" data-lucide="trending-up"></span>
+                                    <h4>Increase 80C Investment</h4>
+                                </div>
+                                <span class="expand-icon" data-lucide="chevron-down"></span>
+                            </div>
+                            <div class="expandable-content">
                                 <p>You can save additional ₹0 by maximizing your 80C deductions</p>
                                 <span class="saving-amount">Already maximized ✓</span>
                             </div>
                         </div>
-                        <div class="saving-item">
-                            <div class="saving-icon" data-lucide="shield"></div>
-                            <div class="saving-content">
-                                <h4>Health Insurance Premium</h4>
+
+                        <div class="expandable-card saving-item">
+                            <div class="expandable-header">
+                                <div class="saving-header-content">
+                                    <span class="saving-icon" data-lucide="shield"></span>
+                                    <h4>Health Insurance Premium</h4>
+                                </div>
+                                <span class="expand-icon" data-lucide="chevron-down"></span>
+                            </div>
+                            <div class="expandable-content">
                                 <p>Consider increasing health insurance coverage for higher 80D deductions</p>
                                 <span class="saving-amount">Save up to ₹7,500</span>
                             </div>
                         </div>
-                        <div class="saving-item">
-                            <div class="saving-icon" data-lucide="home"></div>
-                            <div class="saving-content">
-                                <h4>Home Loan Planning</h4>
+                        
+                        <div class="expandable-card saving-item">
+                            <div class="expandable-header">
+                                <div class="saving-header-content">
+                                    <span class="saving-icon" data-lucide="home"></span>
+                                    <h4>Home Loan Planning</h4>
+                                </div>
+                                <span class="expand-icon" data-lucide="chevron-down"></span>
+                            </div>
+                            <div class="expandable-content">
                                 <p>Your home loan interest deduction is well optimized</p>
                                 <span class="saving-amount">Optimized ✓</span>
                             </div>
                         </div>
+
                     </div>
                 </div>
             </div>
@@ -420,19 +470,34 @@
                     <div class="faq-section">
                         <h3>Frequently Asked Questions</h3>
                         
-                        <div class="faq-item">
-                            <h4>What is the deadline for filing ITR?</h4>
-                            <p>The deadline for filing Income Tax Return (ITR) for AY 2024-25 is July 31, 2024, for individuals and HUFs not required to get their accounts audited.</p>
+                        <div class="expandable-card faq-item">
+                            <div class="expandable-header">
+                                <h4>What is the deadline for filing ITR?</h4>
+                                <span class="expand-icon" data-lucide="chevron-down"></span>
+                            </div>
+                            <div class="expandable-content">
+                                <p>The deadline for filing Income Tax Return (ITR) for AY 2024-25 is July 31, 2024, for individuals and HUFs not required to get their accounts audited.</p>
+                            </div>
                         </div>
 
-                        <div class="faq-item">
-                            <h4>Can I switch between old and new tax regime?</h4>
-                            <p>Yes, salaried individuals can switch between old and new tax regime every year. However, business income earners need to stick to their choice for that year.</p>
+                        <div class="expandable-card faq-item">
+                            <div class="expandable-header">
+                                <h4>Can I switch between old and new tax regime?</h4>
+                                <span class="expand-icon" data-lucide="chevron-down"></span>
+                            </div>
+                            <div class="expandable-content">
+                                <p>Yes, salaried individuals can switch between old and new tax regime every year. However, business income earners need to stick to their choice for that year.</p>
+                            </div>
                         </div>
 
-                        <div class="faq-item">
-                            <h4>What happens if I file ITR after the due date?</h4>
-                            <p>Late filing attracts penalties and you cannot carry forward certain losses. It's always recommended to file within the due date.</p>
+                        <div class="expandable-card faq-item">
+                            <div class="expandable-header">
+                                <h4>What happens if I file ITR after the due date?</h4>
+                                <span class="expand-icon" data-lucide="chevron-down"></span>
+                            </div>
+                            <div class="expandable-content">
+                                <p>Late filing attracts penalties and you cannot carry forward certain losses. It's always recommended to file within the due date.</p>
+                            </div>
                         </div>
                     </div>
                 </div>

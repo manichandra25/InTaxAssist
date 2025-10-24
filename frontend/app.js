@@ -24,15 +24,23 @@ class TaxFilingApp {
     }
 
     init() {
+        // Run icon initialization first
         this.initializeIcons();
+        
+        // Setup all event listeners
         this.setupEventListeners();
         this.setupThemeToggle();
         this.setupTabs();
-        this.setupSidebar();
+        this.setupAccordions(); // MODIFIED: Renamed from setupSidebar
         this.setupUpload();
         this.setupFinancialForm();
         this.setupCharts();
         this.setupChatbot();
+        
+        // NEW: Setup for dynamic content
+        this.setupDynamicContent();
+
+        // Update initial state
         this.updateDashboardStats();
 
         // Check backend connection
@@ -101,7 +109,8 @@ class TaxFilingApp {
         this.activeTab = tabId;
     }
 
-    setupSidebar() {
+    // MODIFIED: This now handles all accordion components
+    setupAccordions() {
         document.querySelectorAll('.expandable-header').forEach(header => {
             header.addEventListener('click', () => {
                 const card = header.closest('.expandable-card');
@@ -110,15 +119,84 @@ class TaxFilingApp {
         });
     }
 
+    // NEW: Handles new dynamic elements
+    setupDynamicContent() {
+        this.startCountdownTimer();
+        this.setupContinueButton();
+        
+        // Re-run lucide to render new icons added to accordions and buttons
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    }
+
+    // NEW: Logic for the "Continue" button on the upload page
+    setupContinueButton() {
+        const continueBtn = document.getElementById('continueToFinancials');
+        if (continueBtn) {
+            continueBtn.addEventListener('click', () => {
+                this.switchTab('financial');
+            });
+        }
+    }
+
+    // NEW: Logic for the countdown timer
+    startCountdownTimer() {
+        // Set your deadline here
+        const deadline = new Date("July 31, 2026 23:59:59").getTime();
+        const countdownTimerEl = document.getElementById('countdownTimer');
+        
+        if (!countdownTimerEl) return;
+
+        const timerInterval = setInterval(() => {
+            const now = new Date().getTime();
+            const distance = deadline - now;
+
+            const daysEl = document.getElementById('days');
+            const hoursEl = document.getElementById('hours');
+            const minutesEl = document.getElementById('minutes');
+            const secondsEl = document.getElementById('seconds');
+
+            if (distance < 0) {
+                clearInterval(timerInterval);
+                countdownTimerEl.innerHTML = "<h4 style='color: white;'>The deadline has passed!</h4>";
+                return;
+            }
+
+            const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+            const format = (num) => num.toString().padStart(2, '0');
+
+            if (daysEl) daysEl.textContent = format(days);
+            if (hoursEl) hoursEl.textContent = format(hours);
+            if (minutesEl) minutesEl.textContent = format(minutes);
+            if (secondsEl) secondsEl.textContent = format(seconds);
+
+        }, 1000);
+    }
+
     setupUpload() {
         const uploadZone = document.getElementById('uploadZone');
         const fileInput = document.getElementById('fileInput');
         const browseBtn = document.getElementById('browseBtn');
         if (!uploadZone || !fileInput || !browseBtn) return;
-        browseBtn.addEventListener('click', () => fileInput.click());
-        uploadZone.addEventListener('click', () => fileInput.click());
+
+        // Fix for the double-click event
+        browseBtn.addEventListener('click', (event) => {
+            event.stopPropagation(); // Stop click from bubbling to uploadZone
+            fileInput.click();
+        });
+        
+        uploadZone.addEventListener('click', () => {
+            fileInput.click();
+        });
+        
         fileInput.addEventListener('change', (e) => {
             this.handleFileUpload(Array.from(e.target.files));
+            e.target.value = null; // Clear input to allow re-uploading same file
         });
     }
 
@@ -132,7 +210,8 @@ class TaxFilingApp {
             }
         }
         this.updateDashboardStats();
-        this.switchTab('financial');
+        // Do not auto-switch tab, wait for user to click "Continue"
+        // this.switchTab('financial'); 
     }
 
     async uploadAndParseDocument(file) {
@@ -281,7 +360,7 @@ class TaxFilingApp {
         const response = await fetch(`${this.backendUrl}/api/calculate-tax`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ financial_data: financialData, assessment_year: "2024-25" })
+            body: JSON.stringify({ financial_data: financialData, assessment_year: "2025-26" })
         });
         if (!response.ok) throw new Error(`API request failed: ${response.statusText}`);
         return await response.json();
@@ -364,7 +443,6 @@ class TaxFilingApp {
         return await response.json();
     }
 
-    // --- THIS FUNCTION IS UPDATED ---
     addChatMessage(sender, message) {
         const chatMessages = document.getElementById('chatMessages');
         if (!chatMessages) return;
@@ -391,13 +469,24 @@ class TaxFilingApp {
         if (comparisonChart && typeof Chart !== 'undefined') {
             const ctx = comparisonChart.getContext('2d');
             this.charts.comparison = new Chart(ctx, {
-                type: 'bar',
+                // MODIFIED: Changed to line chart
+                type: 'line', 
                 data: {
                     labels: ['2023-24', '2024-25', '2025-26 (Est.)'],
                     datasets: [{
-                        label: 'Old Regime', data: [175000, 185000, 190000], backgroundColor: 'rgba(33, 128, 141, 0.8)',
+                        label: 'Old Regime', 
+                        data: [175000, 185000, 190000], 
+                        backgroundColor: 'rgba(33, 128, 141, 0.2)',
+                        borderColor: 'rgba(33, 128, 141, 1)',
+                        tension: 0.3,
+                        fill: true
                     }, {
-                        label: 'New Regime', data: [148000, 156000, 162000], backgroundColor: 'rgba(50, 184, 198, 0.8)',
+                        label: 'New Regime', 
+                        data: [148000, 156000, 162000], 
+                        backgroundColor: 'rgba(50, 184, 198, 0.2)',
+                        borderColor: 'rgba(50, 184, 198, 1)',
+                        tension: 0.3,
+                        fill: true
                     }]
                 },
                 options: {
@@ -463,7 +552,7 @@ class TaxFilingApp {
             });
         }
 
-        // Year-over-Year Comparison Chart (Bar)
+        // Year-over-Year Comparison Chart (Line)
         const yearCtx = document.getElementById('yearComparisonChart')?.getContext('2d');
         if (yearCtx) {
             const data = {
@@ -471,18 +560,25 @@ class TaxFilingApp {
                 datasets: [{
                     label: 'Old Regime Tax',
                     data: [...this.data.mockTaxData.previousYears.oldRegime, result.old_regime.total_tax],
-                    backgroundColor: 'rgba(33, 128, 141, 0.8)',
+                    backgroundColor: 'rgba(33, 128, 141, 0.2)',
+                    borderColor: 'rgba(33, 128, 141, 1)',
+                    tension: 0.3,
+                    fill: true
                 }, {
                     label: 'New Regime Tax',
                     data: [...this.data.mockTaxData.previousYears.newRegime, result.new_regime.total_tax],
-                    backgroundColor: 'rgba(50, 184, 198, 0.8)',
+                    backgroundColor: 'rgba(50, 184, 198, 0.2)',
+                    borderColor: 'rgba(50, 184, 198, 1)',
+                    tension: 0.3,
+                    fill: true
                 }]
             };
             if (this.charts.yearComparison) {
                 this.charts.yearComparison.destroy();
             }
             this.charts.yearComparison = new Chart(yearCtx, {
-                type: 'bar',
+                // MODIFIED: Changed to line chart
+                type: 'line', 
                 data: data,
                 options: {
                     responsive: true,
@@ -536,4 +632,4 @@ class TaxFilingApp {
 const app = new TaxFilingApp();
 
 // Export for global access
-window.app = app;
+window.app = app;   

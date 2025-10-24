@@ -179,6 +179,10 @@ text-decoration: none;
 position: relative;
 }
 
+.btn:hover {
+transform: scale(1.03); /* Add subtle hover scale */
+}
+
 .btn--primary {
 background: var(--color-primary);
 color: white;
@@ -373,14 +377,18 @@ display: flex;
 align-items: center;
 gap: var(--space-12);
 padding: var(--space-12) var(--space-16);
+margin: 0 var(--space-12) var(--space-4); /* Add margin */
 color: var(--color-text-secondary);
 text-decoration: none;
 transition: all var(--duration-fast) var(--ease-standard);
+border-radius: var(--radius-base); /* Add radius */
+border-left: 3px solid transparent; /* Add transparent border */
 }
 
 .nav-item:hover, .nav-item.active {
 background: var(--color-secondary);
 color: var(--color-text);
+border-left: 3px solid var(--color-primary); /* Highlight active */
 }
 
 /* Main Content */
@@ -422,6 +430,54 @@ display: block;
 }
 
 /* Dashboard */
+/* NEW: Countdown Timer */
+.countdown-timer-card {
+    margin-bottom: var(--space-32);
+    background: linear-gradient(135deg, var(--color-primary), var(--color-teal-800));
+    color: var(--color-white);
+    text-align: center;
+    border: none;
+}
+.countdown-timer-card h4 {
+    color: var(--color-white);
+    opacity: 0.9;
+    font-weight: var(--font-weight-medium);
+}
+.countdown-timer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: var(--space-16);
+    margin-top: var(--space-16);
+}
+.timer-segment {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.timer-segment span {
+    font-size: var(--font-size-4xl);
+    font-weight: var(--font-weight-bold);
+    line-height: var(--line-height-tight);
+    animation: pulse 1s ease-in-out infinite;
+}
+.timer-segment small {
+    font-size: var(--font-size-sm);
+    opacity: 0.8;
+}
+.timer-separator {
+    font-size: var(--font-size-3xl);
+    font-weight: var(--font-weight-bold);
+    animation: pulse 1s ease-in-out infinite;
+}
+
+/* Animation for the timer digits */
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
 .stats-grid {
 display: grid;
 grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -429,6 +485,7 @@ gap: var(--space-16);
 margin-bottom: var(--space-32);
 }
 
+/* MODIFIED: Stat Card */
 .stat-card {
 background: var(--color-surface);
 border: 1px solid var(--color-card-border);
@@ -437,16 +494,23 @@ padding: var(--space-16);
 display: flex;
 align-items: center;
 gap: var(--space-16);
+transition: all var(--duration-normal) var(--ease-standard);
+border-left: 4px solid var(--color-primary); /* Add accent */
+}
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-md);
 }
 
+/* MODIFIED: Stat Icon */
 .stat-icon {
 width: 48px;
 height: 48px;
 display: flex;
 align-items: center;
 justify-content: center;
-background: var(--color-primary);
-color: white;
+background: var(--color-secondary); /* Softer background */
+color: var(--color-primary); /* Icon color matches primary */
 border-radius: var(--radius-lg);
 }
 
@@ -496,11 +560,29 @@ cursor: pointer;
 display: flex;
 align-items: center;
 justify-content: space-between;
-border-bottom: 1px solid var(--color-card-border);
+}
+
+/* MODIFIED: Added border only when expanded */
+.expandable-card.expanded .expandable-header {
+    border-bottom: 1px solid var(--color-card-border);
 }
 
 .expandable-content {
 padding: var(--space-16);
+display: none; /* Hide content by default */
+}
+
+/* MODIFIED: Show content when expanded */
+.expandable-card.expanded .expandable-content {
+    display: block;
+}
+
+/* MODIFIED: Rotate icon when expanded */
+.expand-icon {
+    transition: transform var(--duration-normal) var(--ease-standard);
+}
+.expandable-card.expanded .expand-icon {
+    transform: rotate(180deg);
 }
 
 .form-grid {
@@ -573,6 +655,41 @@ border-radius: var(--radius-full);
 font-size: var(--font-size-sm);
 margin-top: var(--space-8);
 }
+
+/* NEW: Tax Savings Accordion */
+.saving-item.expandable-card {
+    margin-bottom: var(--space-12);
+}
+.saving-item .expandable-header {
+    border-bottom: 0; 
+}
+.saving-item .expandable-content {
+    padding-top: 0;
+}
+.saving-header-content {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+}
+.saving-icon {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-secondary);
+    color: var(--color-primary);
+    border-radius: var(--radius-base);
+    flex-shrink: 0;
+}
+.saving-item h4 {
+    margin: 0;
+}
+.saving-item p {
+    margin-top: var(--space-8);
+    margin-bottom: 0;
+}
+
 
 /* Chatbot */
 .chatbot-container {
@@ -648,21 +765,41 @@ transition: all var(--duration-fast) var(--ease-standard);
 .quick-question-btn:hover {
 background: var(--color-secondary);
 border-color: var(--color-primary);
+transform: scale(1.02); /* Add hover effect */
 }
 
-/* FAQ Section */
-.faq-item {
-background: var(--color-surface);
-border: 1px solid var(--color-card-border);
-border-radius: var(--radius-base);
-padding: var(--space-16);
-margin-bottom: var(--space-12);
+/* NEW: FAQ Accordion */
+.faq-item.expandable-card {
+    background: transparent; /* Make it blend */
+    box-shadow: none;
+    margin-bottom: var(--space-8);
 }
-
+.faq-item .expandable-header {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-base);
+    background: var(--color-surface);
+}
+.faq-item.expanded .expandable-header {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+.faq-item .expandable-content {
+    padding: var(--space-16);
+    border: 1px solid var(--color-border);
+    border-top: 0;
+    border-bottom-left-radius: var(--radius-base);
+    border-bottom-right-radius: var(--radius-base);
+    background: var(--color-surface);
+}
 .faq-item h4 {
-color: var(--color-primary);
-margin-bottom: var(--space-8);
+    color: var(--color-primary);
+    margin-bottom: 0;
+    font-size: var(--font-size-base);
 }
+.faq-item p {
+    margin: 0;
+}
+
 
 /* Utility Classes */
 .hidden { display: none !important; }
@@ -798,10 +935,10 @@ grid-template-columns: 1fr;
     font-weight: var(--font-weight-medium);
 }
 
-/* ADD THIS NEW RULE FOR BAR CHARTS */
+/* MODIFIED: Bar chart container */
 .chart-container-bar {
     position: relative;
-    height: 280px; /* Controls the height of the bar charts */
+    height: 280px; /* Controls the height of the line charts */
     width: 100%;
 }
 
