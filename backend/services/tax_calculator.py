@@ -6,7 +6,7 @@ from backend.models import (
     FinancialData, RegimeTaxDetails, TaxCalculationResponse, 
     TaxRegimeComparison, TaxSavingSuggestion, TaxSlabDetail, TaxRegime
 )
-from backend.config import TAX_SLABS, DEDUCTION_LIMITS
+from backend.config import TAX_SLABS, DEDUCTION_LIMITS, is_metro_city
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +108,28 @@ class TaxCalculatorService:
             refund_or_payable=refund_or_payable
         )
 
+    def _calculate_hra_exemption(self, financial_data: FinancialData) -> float:
+        """Calculate HRA exemption based on rules:
+        Minimum of:
+        1. Actual HRA received
+        2. 50% of basic salary (metro) or 40% (non-metro)
+        3. Actual rent paid minus 10% of basic salary
+        """
+        if not financial_data.hra or not financial_data.rent_paid:
+            return 0
+
+        # Get city type rate (50% for metro, 40% for non-metro)
+        is_metro = financial_data.city and is_metro_city(financial_data.city)
+        salary_percent = DEDUCTION_LIMITS["hra_metro_rate"] if is_metro else DEDUCTION_LIMITS["hra_non_metro_rate"]
+        
+        # Calculate the three conditions
+        actual_hra = financial_data.hra
+        salary_based = financial_data.basic_salary * salary_percent
+        rent_based = max(0, financial_data.rent_paid - (financial_data.basic_salary * 0.1))
+
+        # Return minimum of the three
+        return min(actual_hra, salary_based, rent_based)
+
     def _calculate_old_regime_deductions(self, financial_data: FinancialData) -> float:
         """Calculate total deductions for old regime"""
 
@@ -115,6 +137,9 @@ class TaxCalculatorService:
 
         # Standard deduction
         deductions += financial_data.standard_deduction
+
+        # HRA exemption
+        deductions += self._calculate_hra_exemption(financial_data)
 
         # Section 80C (max 1.5 lakh)
         deductions += min(financial_data.section_80c, DEDUCTION_LIMITS["section_80c"])

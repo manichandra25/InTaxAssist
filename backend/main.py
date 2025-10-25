@@ -317,43 +317,77 @@ async def compare_tax_regimes(request: Dict[str, Any]):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/tax-saving-suggestions")
-async def get_tax_saving_suggestions(
-    income: float = 1000000,
-    regime: str = "old"
-):
+@app.post("/api/tax-saving-suggestions")
+async def get_tax_saving_suggestions(request: Dict[str, Any]):
     """
     Provide personalized tax saving suggestions
     """
     try:
-        suggestions = [
-            {
-                "category": "Section 80C Investment",
-                "description": "Maximize your 80C deductions with PPF, ELSS, or NSC",
-                "potential_savings": 46800,
+        income = request.get("income", 0)
+        current_deductions = request.get("current_deductions", {})
+        regime = request.get("regime", "old")
+
+        # Calculate remaining deduction potential
+        max_80c = 150000
+        max_80d = 25000
+        current_80c = current_deductions.get("section_80c", 0)
+        current_80d = current_deductions.get("section_80d", 0)
+        
+        suggestions = []
+        
+        # Only suggest if in old regime or there's potential for savings
+        if regime == "old":
+            # 80C suggestion
+            if current_80c < max_80c:
+                remaining_80c = max_80c - current_80c
+                potential_savings = (remaining_80c * 0.3)  # Assuming 30% tax bracket
+                suggestions.append({
+                    "category": "Section 80C Investment",
+                    "description": f"You can invest ₹{remaining_80c:,.0f} more in 80C instruments",
+                    "potential_savings": potential_savings,
+                    "implementation_difficulty": "Easy",
+                    "priority": 1,
+                    "details": "Consider PPF (15-year), ELSS (3-year), or NSC (5-year)"
+                })
+
+            # 80D suggestion
+            if current_80d < max_80d:
+                remaining_80d = max_80d - current_80d
+                potential_savings = (remaining_80d * 0.3)  # Assuming 30% tax bracket
+                suggestions.append({
+                    "category": "Health Insurance (80D)",
+                    "description": f"Increase health insurance coverage by ₹{remaining_80d:,.0f}",
+                    "potential_savings": potential_savings,
+                    "implementation_difficulty": "Easy",
+                    "priority": 2,
+                    "details": "Health insurance for family provides tax benefits and protection"
+                })
+
+            # NPS suggestion (if not maxed out)
+            current_nps = current_deductions.get("section_80ccd1b", 0)
+            if current_nps < 50000:
+                remaining_nps = 50000 - current_nps
+                potential_savings = (remaining_nps * 0.3)
+                suggestions.append({
+                    "category": "NPS Investment (80CCD1B)",
+                    "description": f"Invest ₹{remaining_nps:,.0f} more in NPS for additional tax benefits",
+                    "potential_savings": potential_savings,
+                    "implementation_difficulty": "Medium",
+                    "priority": 3,
+                    "details": "NPS offers extra ₹50,000 deduction under 80CCD(1B)"
+                })
+        else:
+            # For new regime
+            suggestions.append({
+                "category": "Regime Comparison",
+                "description": "You're in the new tax regime",
+                "potential_savings": 0,
                 "implementation_difficulty": "Easy",
                 "priority": 1,
-                "details": "Invest ₹1.5 lakh in tax-saving instruments"
-            },
-            {
-                "category": "Health Insurance (80D)",
-                "description": "Get comprehensive health insurance for tax benefits",
-                "potential_savings": 7500,
-                "implementation_difficulty": "Easy",
-                "priority": 2,
-                "details": "Health insurance premiums up to ₹25,000 qualify for deduction"
-            },
-            {
-                "category": "NPS Investment (80CCD1B)",
-                "description": "Additional ₹50,000 deduction through NPS",
-                "potential_savings": 15000,
-                "implementation_difficulty": "Medium",
-                "priority": 3,
-                "details": "Invest in NPS for retirement planning with tax benefits"
-            }
-        ]
+                "details": "New regime has lower tax rates but limited deductions. Compare annually based on your investments."
+            })
 
-        return {"suggestions": suggestions}
+        return suggestions
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -70,6 +70,22 @@ class Settings(BaseSettings):
 
 # Tax slab configurations for different assessment years
 TAX_SLABS = {
+        "2025-26": {
+        "old": [
+            {"min": 0, "max": 250000, "rate": 0},
+            {"min": 250000, "max": 500000, "rate": 5},
+            {"min": 500000, "max": 1000000, "rate": 20},
+            {"min": 1000000, "max": None, "rate": 30}
+        ],
+        "new": [
+            {"min": 0, "max": 300000, "rate": 0},
+            {"min": 300000, "max": 600000, "rate": 5},
+            {"min": 600000, "max": 900000, "rate": 10},
+            {"min": 900000, "max": 1200000, "rate": 15},
+            {"min": 1200000, "max": 1500000, "rate": 20},
+            {"min": 1500000, "max": None, "rate": 30}
+        ]
+    },
     "2024-25": {
         "old": [
             {"min": 0, "max": 250000, "rate": 0},
@@ -101,7 +117,26 @@ TAX_SLABS = {
             {"min": 1200000, "max": 1500000, "rate": 20},
             {"min": 1500000, "max": None, "rate": 30}
         ]
+    },
+    "2022-23": {
+        "old": [
+            {"min": 0, "max": 250000, "rate": 0},
+            {"min": 250000, "max": 500000, "rate": 5},
+            {"min": 500000, "max": 1000000, "rate": 20},
+            {"min": 1000000, "max": None, "rate": 30}
+        ],
+        "new": [
+            {"min": 0, "max": 300000, "rate": 0},
+            {"min": 300000, "max": 600000, "rate": 5},
+            {"min": 600000, "max": 900000, "rate": 10},
+            {"min": 900000, "max": 1200000, "rate": 15},
+            {"min": 1200000, "max": 1500000, "rate": 20},
+            {"min": 1500000, "max": None, "rate": 30}
+        ]
     }
+    
+
+    
 }
 
 # Deduction limits and configurations

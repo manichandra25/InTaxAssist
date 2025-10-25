@@ -48,17 +48,10 @@ class ChatbotService:
         self.embeddings = None
         self.vectorstore = None
         self.qa_chain = None
-        self.memory = None
         self.text_splitter = None
         self.user_sessions = {}  # Temporary session storage
+        self.memories = {}  # Dictionary to store memories for each session
         if LANGCHAIN_AVAILABLE:
-            self.memory = ConversationBufferWindowMemory(
-                chat_memory=ChatMessageHistory(),
-                memory_key="chat_history",
-                output_key='answer',
-                k=10
-            )
-
             self.text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=500,
                 chunk_overlap=50
@@ -196,6 +189,9 @@ class ChatbotService:
 
             chat_prompt = ChatPromptTemplate.from_messages([system_message, human_message])
 
+            # store prompt template for reuse when creating per-session chains
+            self.chat_prompt = chat_prompt
+
             # Create conversational retrieval chain with Groq
             self.qa_chain = ConversationalRetrievalChain.from_llm(
                 llm=self.llm,
@@ -205,7 +201,7 @@ class ChatbotService:
                         "score_threshold": 0.0  # Lower threshold for broader matching
                     }
                 ),
-                memory=self.memory,
+                memory=None,  # Memory will be set per session
                 return_source_documents=True,
                 verbose=getattr(settings, 'DEBUG', False),
                 combine_docs_chain_kwargs={"prompt": chat_prompt},
@@ -227,8 +223,29 @@ class ChatbotService:
         """Process user query and return comprehensive response"""
 
         start_time = time.time()
+        session_key = f"{user_id}_{session_id}" if user_id and session_id else "anonymous"
 
         try:
+            # Initialize session memory if it doesn't exist
+            if session_key not in self.memories and LANGCHAIN_AVAILABLE:
+                # Newer LangChain memory API prefers return_messages and avoids passing ChatMessageHistory directly
+                # Use conversation window memory per session to retain recent turns
+                try:
+                    self.memories[session_key] = ConversationBufferWindowMemory(
+                        memory_key="chat_history",
+                        output_key='answer',
+                        k=10,
+                        return_messages=True
+                    )
+                except TypeError:
+                    # Fallback for older/other versions that still accept chat_memory
+                    self.memories[session_key] = ConversationBufferWindowMemory(
+                        chat_memory=ChatMessageHistory(),
+                        memory_key="chat_history",
+                        output_key='answer',
+                        k=10
+                    )
+
             # Check if query is tax-related
             if not self._is_tax_related_query(query):
                 return {
@@ -252,12 +269,26 @@ class ChatbotService:
                     enhanced_query = self._enhance_query_with_context(query, user_context)
                     
                     # Use LangChain RAG with Groq for response
+                    # Create a copy of the chain with session-specific memory
+                    session_chain = ConversationalRetrievalChain.from_llm(
+                        llm=self.llm,
+                        retriever=self.vectorstore.as_retriever(
+                            search_kwargs={
+                                "k": 5,
+                                "score_threshold": 0.0
+                            }
+                        ),
+                        memory=self.memories[session_key],
+                        return_source_documents=True,
+                        verbose=getattr(settings, 'DEBUG', False),
+                        combine_docs_chain_kwargs={"prompt": getattr(self, 'chat_prompt', None)},
+                        max_tokens_limit=4000
+                    )
+
+                    # Let the chain use its configured memory internally; pass only the question
                     result = await asyncio.to_thread(
-                        self.qa_chain,
-                        {
-                            "question": enhanced_query,
-                            # "user_context": user_context.get("context_description", "")
-                        }
+                        session_chain,
+                        {"question": enhanced_query}
                     )
 
                     response_text = result["answer"]

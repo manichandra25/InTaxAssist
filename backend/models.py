@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Dict, Optional, Any, Union
 from datetime import datetime
 from enum import Enum
@@ -17,6 +17,11 @@ class FinancialData(BaseModel):
     special_allowance: float = Field(default=0, ge=0, description="Special allowance")
     other_allowances: float = Field(default=0, ge=0, description="Other allowances")
     bonus: float = Field(default=0, ge=0, description="Bonus amount")
+    
+    # HRA related fields
+    rent_paid: float = Field(default=0, ge=0, description="Annual rent paid")
+    city: Optional[str] = Field(default=None, description="City of residence for HRA calculation")
+    is_metro: bool = Field(default=False, description="Whether residence is in a metro city")
 
     # Other income sources
     interest_income: float = Field(default=0, ge=0, description="Interest from savings/FD")
@@ -41,12 +46,12 @@ class FinancialData(BaseModel):
     tds_deducted: float = Field(default=0, ge=0, description="TDS already deducted")
     advance_tax: float = Field(default=0, ge=0, description="Advance tax paid")
 
-    @validator('section_80c')
+    @field_validator('section_80c')
     def validate_80c_limit(cls, v):
         """Ensure 80C doesn't exceed limit"""
         return min(v, 150000)
 
-    @validator('section_80d')
+    @field_validator('section_80d')
     def validate_80d_limit(cls, v):
         """Ensure 80D doesn't exceed limit for individuals"""
         return min(v, 25000)

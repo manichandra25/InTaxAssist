@@ -112,9 +112,22 @@ class TaxFilingApp {
     // MODIFIED: This now handles all accordion components
     setupAccordions() {
         document.querySelectorAll('.expandable-header').forEach(header => {
-            header.addEventListener('click', () => {
+            // Make header keyboard-focusable for accessibility
+            if (!header.hasAttribute('tabindex')) header.setAttribute('tabindex', '0');
+
+            const toggle = (e) => {
                 const card = header.closest('.expandable-card');
+                if (!card) return; // guard against unexpected DOM structure
                 card.classList.toggle('expanded');
+            };
+
+            header.addEventListener('click', toggle);
+            // Support keyboard toggle via Enter or Space
+            header.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggle(e);
+                }
             });
         });
     }
@@ -307,7 +320,20 @@ class TaxFilingApp {
                 });
             }
         });
-        this.loadMockData();
+        // Only load mock data if no data exists
+        if (!this.hasExistingData()) {
+            this.loadMockData();
+        }
+    }
+
+    hasExistingData() {
+        // Check if any input field has a value
+        const inputs = ['basicSalary', 'hra', 'specialAllowance', 'otherAllowances', 
+                       'section80c', 'section80d', 'section24', 'tdsDeducted'];
+        return inputs.some(id => {
+            const input = document.getElementById(id);
+            return input && input.value && parseFloat(input.value) > 0;
+        });
     }
 
     loadMockData() {
@@ -386,6 +412,8 @@ class TaxFilingApp {
         const taxPaid = document.getElementById('taxPaid');
         const additionalPayment = document.getElementById('additionalPayment');
         const recommended = result.recommended_regime === 'old' ? result.old_regime : result.new_regime;
+        
+        // Update main tax results
         if (totalTaxLiability) totalTaxLiability.textContent = `₹${recommended.total_tax.toLocaleString()}`;
         if (recommendedRegime) recommendedRegime.textContent = result.recommended_regime.charAt(0).toUpperCase() + result.recommended_regime.slice(1) + ' Regime';
         if (taxPaid) taxPaid.textContent = `₹${this.getFormData().tds_deducted.toLocaleString()}`;
@@ -394,6 +422,89 @@ class TaxFilingApp {
             additionalPayment.textContent = `₹${Math.abs(additional).toLocaleString()}`;
             additionalPayment.style.color = additional >= 0 ? 'var(--color-error)' : 'var(--color-success)';
         }
+
+        // Update tax saving suggestions
+        this.updateTaxSavingSuggestions(result);
+    }
+
+    async updateTaxSavingSuggestions(result) {
+        try {
+            // Get tax saving suggestions from the backend
+            const response = await fetch(`${this.backendUrl}/api/tax-saving-suggestions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    income: result.old_regime.gross_income,
+                    current_deductions: {
+                        section_80c: this.getFormData().section_80c,
+                        section_80d: this.getFormData().section_80d,
+                        section_80ccd1b: 0, // Add if you have NPS data
+                        section_24: this.getFormData().section_24
+                    },
+                    regime: result.recommended_regime
+                })
+            });
+
+            if (!response.ok) throw new Error('Failed to fetch suggestions');
+            const suggestions = await response.json();
+
+            // Ensure suggestions is treated as an array
+            const suggestionsArray = Array.isArray(suggestions) ? suggestions : [];
+
+            // Update the suggestions count
+            const suggestionCount = document.querySelector('.tax-savings .count');
+            if (suggestionCount) {
+                suggestionCount.textContent = `${suggestionsArray.length} opportunities`;
+            }
+
+            // Clear existing suggestions
+            const savingsList = document.querySelector('.savings-list');
+            if (savingsList) {
+                savingsList.innerHTML = '';
+
+                // Add new suggestions
+                suggestions.forEach(suggestion => {
+                    const savingItem = document.createElement('div');
+                    savingItem.className = 'expandable-card saving-item';
+                    savingItem.innerHTML = `
+                        <div class="expandable-header">
+                            <div class="saving-header-content">
+                                <span class="saving-icon" data-lucide="${this.getSuggestionIcon(suggestion.category)}"></span>
+                                <h4>${suggestion.category}</h4>
+                            </div>
+                            <span class="expand-icon" data-lucide="chevron-down"></span>
+                        </div>
+                        <div class="expandable-content">
+                            <p>${suggestion.description}</p>
+                            <span class="saving-amount">Save up to ₹${suggestion.potential_savings.toLocaleString()}</span>
+                            ${suggestion.details ? `<p class="saving-details">${suggestion.details}</p>` : ''}
+                        </div>
+                    `;
+                    savingsList.appendChild(savingItem);
+                });
+
+                // Re-initialize Lucide icons and accordion behavior
+                if (typeof lucide !== 'undefined') {
+                    lucide.createIcons();
+                }
+                this.setupAccordions();
+            }
+        } catch (error) {
+            console.error('Error updating tax suggestions:', error);
+            this.showToast('Failed to update tax saving suggestions', 'error');
+        }
+    }
+
+    getSuggestionIcon(category) {
+        const iconMap = {
+            'Section 80C Investment': 'trending-up',
+            'Health Insurance (80D)': 'shield',
+            'NPS Investment (80CCD1B)': 'landmark',
+            'Home Loan Planning': 'home',
+            'Regime Comparison': 'git-compare',
+            'default': 'info'
+        };
+        return iconMap[category] || iconMap.default;
     }
 
     setupChatbot() {
