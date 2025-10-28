@@ -1,6 +1,4 @@
-# Interactive Tax Filing System
-
-###(STILL UNDER DEVELOPMENT!!!)
+# Interactive Tax Filing System (STILL UNDER DEVELOPMENT!!!)
 A comprehensive full-stack application for automated tax filing with document parsing, tax calculation, and AI-powered assistance.
 
 ## 🎯 Features
