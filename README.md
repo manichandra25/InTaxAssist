@@ -18,6 +18,7 @@ A comprehensive full-stack application for automated tax filing with document pa
 - **Form Management**: Auto-filling forms from parsed documents
 - **Charts & Analytics**: Interactive charts using Chart.js
 - **Chatbot Interface**: Integrated AI assistant for tax help
+- **Tax Export**: Download ITR-compatible summaries (PDF, CSV, JSON)
 - **Responsive Design**: Mobile-friendly responsive interface
 - **Dark/Light Mode**: Theme toggle with system preference detection
 
@@ -133,6 +134,7 @@ The system supports configurable tax rules in `backend/config.py`:
 | `/api/upload` | POST | Upload & parse documents |
 | `/api/calculate-tax` | POST | Calculate tax for both regimes |
 | `/api/compare-regimes` | POST | Compare old vs new regime |
+| `/api/export-tax-summary` | POST | Export ITR summary (PDF/CSV/JSON) |
 | `/api/chatbot` | POST | AI chatbot queries |
 | `/api/tax-slabs/{regime}` | GET | Get tax slab information |
 | `/api/tax-saving-suggestions` | GET | Tax optimization tips |
@@ -141,6 +143,46 @@ The system supports configurable tax rules in `backend/config.py`:
 
 - **Swagger UI**: http://localhost:8000/docs
 - **ReDoc**: http://localhost:8000/redoc
+
+## 📊 Tax Export Feature
+
+The system now includes comprehensive export functionality for ITR (Income Tax Return) filing:
+
+### Export Formats Supported
+
+1. **PDF Document** 📄
+   - Professional, printable format
+   - Ideal for submitting to tax consultants
+   - Includes all tax details in organized sections
+
+2. **CSV Spreadsheet** 📊
+   - Editable format for import into tax filing portals
+   - Compatible with Income Tax Department's e-filing system
+   - Easy to import into Excel/Google Sheets
+
+3. **JSON Data** 📋
+   - Structured format for programmatic access
+   - Suitable for data integration and backup
+   - Complete tax calculation details
+
+### Using the Export Feature
+
+1. Calculate your tax using the financial form
+2. Click the "Export" button in the navbar
+3. Choose your desired format
+4. Download the file for review and filing
+
+### ITR Compliance
+
+Exported summaries include all required sections:
+- Personal details (Name, PAN, Aadhar, Address)
+- Income details (Salary, interest, rental, capital gains)
+- Deductions (80C, 80D, 80E, 80G, 24, etc.)
+- Tax calculation with slab breakdown
+- TDS and advance tax details
+- Refund/Payable status
+- Regime comparison and recommendations
+
 
 ## 🤖 AI Features
 

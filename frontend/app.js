@@ -81,6 +81,12 @@ class TaxFilingApp {
         if (calculateBtn) {
             calculateBtn.addEventListener('click', () => this.calculateTax());
         }
+
+        // Setup export button
+        const exportBtn = document.getElementById('exportBtn');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', () => this.showExportOptions());
+        }
     }
 
     setupThemeToggle() {
@@ -253,19 +259,92 @@ class TaxFilingApp {
     }
 
     populateFormWithExtractedData(data) {
+        // Validation: Check for unreasonably large values that might indicate extraction errors
+        // These limits match the backend model validation
+        const limits = {
+            'basicSalary': { max: 50000000, label: 'Basic Salary', field: 'basic_salary' },
+            'hra': { max: 10000000, label: 'HRA', field: 'hra' },
+            'specialAllowance': { max: 10000000, label: 'Special Allowance', field: 'special_allowance' },
+            'otherAllowances': { max: 10000000, label: 'Other Allowances', field: 'other_allowances' },
+            'tdsDeducted': { max: 50000000, label: 'TDS', field: 'tds_deducted' },
+            'section80c': { max: 150000, label: 'Section 80C', field: 'section_80c' },
+            'section80d': { max: 100000, label: 'Section 80D', field: 'section_80d' },
+            'section24': { max: 5000000, label: 'Section 24', field: 'section_24' }
+        };
+        
+        const validationErrors = [];
         const fieldMap = {
             'basicSalary': 'basic_salary', 'hra': 'hra',
             'specialAllowance': 'special_allowance', 'otherAllowances': 'other_allowances',
             'section80c': 'section_80c', 'section80d': 'section_80d',
             'section24': 'section_24', 'tdsDeducted': 'tds_deducted'
         };
+        // Helper: normalize numeric strings from backend/extraction (handles comma/dot separators)
+        const normalizeNumericString = (v) => {
+            if (v === null || v === undefined) return 0;
+            let s = String(v).trim();
+            // Remove any non-digit, non-dot, non-comma characters
+            s = s.replace(/[^0-9.,]/g, '');
+            if (!s) return 0;
+            // If both comma and dot present, remove commas (assume comma thousands)
+            if (s.indexOf(',') !== -1 && s.indexOf('.') !== -1) {
+                s = s.replace(/,/g, '');
+                return parseFloat(s) || 0;
+            }
+            // If only commas present, remove them
+            if (s.indexOf(',') !== -1 && s.indexOf('.') === -1) {
+                s = s.replace(/,/g, '');
+                return parseFloat(s) || 0;
+            }
+            // If multiple dots, treat all but last as thousand separators
+            const dotCount = (s.match(/\./g) || []).length;
+            if (dotCount > 1) {
+                const parts = s.split('.');
+                const integerPart = parts.slice(0, -1).join('');
+                const decimalPart = parts[parts.length - 1];
+                s = integerPart + '.' + decimalPart;
+            }
+            return parseFloat(s) || 0;
+        };
+        
         Object.entries(fieldMap).forEach(([fieldId, dataKey]) => {
             const field = document.getElementById(fieldId);
             if (field && data[dataKey]) {
-                field.value = data[dataKey];
+                const value = normalizeNumericString(data[dataKey]);
+                const limit = limits[fieldId];
+                
+                // Validate extracted value
+                if (isNaN(value)) {
+                    console.warn(`Invalid extracted value for ${dataKey}: ${data[dataKey]}`);
+                    validationErrors.push(`Invalid value for ${limit.label}`);
+                    return;
+                }
+                
+                if (value > limit.max) {
+                    console.warn(`Extracted ${limit.label} (${value.toLocaleString()}) exceeds limit (${limit.max.toLocaleString()})`);
+                    validationErrors.push(`${limit.label} (₹${value.toLocaleString()}) exceeds maximum of ₹${limit.max.toLocaleString()}, please verify`);
+                    return; // Skip populating this field
+                }
+                
+                if (value < 0) {
+                    console.warn(`Negative value extracted for ${dataKey}: ${value}`);
+                    validationErrors.push(`${limit.label} cannot be negative`);
+                    return; // Skip populating this field
+                }
+                
+                field.value = value || 0;
                 field.dispatchEvent(new Event('input'));
             }
         });
+        
+        // Show validation errors if any
+        if (validationErrors.length > 0) {
+            validationErrors.forEach(error => {
+                console.warn(`Validation: ${error}`);
+                this.showToast(`⚠️ ${error}. Extracted value seems incorrect, please review manually.`, 'warning');
+            });
+        }
+        
         this.updateTaxPreview();
     }
 
@@ -383,27 +462,67 @@ class TaxFilingApp {
     }
 
     async calculateTaxAPI(financialData) {
+        console.log("DEBUG: Sending financial data to backend:", financialData);
         const response = await fetch(`${this.backendUrl}/api/calculate-tax`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ financial_data: financialData, assessment_year: "2025-26" })
         });
         if (!response.ok) throw new Error(`API request failed: ${response.statusText}`);
-        return await response.json();
+        const result = await response.json();
+        console.log("DEBUG: Backend response:", result);
+        console.log("DEBUG: Old regime - gross_income:", result.old_regime.gross_income, "taxable_income:", result.old_regime.taxable_income, "total_tax:", result.old_regime.total_tax);
+        console.log("DEBUG: New regime - gross_income:", result.new_regime.gross_income, "taxable_income:", result.new_regime.taxable_income, "total_tax:", result.new_regime.total_tax);
+        return result;
     }
 
     getFormData() {
-        return {
-            basic_salary: parseFloat(document.getElementById('basicSalary')?.value) || 0,
-            hra: parseFloat(document.getElementById('hra')?.value) || 0,
-            special_allowance: parseFloat(document.getElementById('specialAllowance')?.value) || 0,
-            other_allowances: parseFloat(document.getElementById('otherAllowances')?.value) || 0,
-            section_80c: parseFloat(document.getElementById('section80c')?.value) || 0,
-            section_80d: parseFloat(document.getElementById('section80d')?.value) || 0,
-            section_24: parseFloat(document.getElementById('section24')?.value) || 0,
-            tds_deducted: parseFloat(document.getElementById('tdsDeducted')?.value) || 0,
-            standard_deduction: 50000
+        // Note: Form currently has these fields only
+        // More fields (bonus, rental_income, etc.) can be added to the form later
+        const maxReasonableValue = 50000000; // ₹5 crore max for validation
+        
+        const parseAndValidate = (value) => {
+            const parsed = parseFloat(value) || 0;
+            // Ensure value is within reasonable range
+            if (parsed > maxReasonableValue) {
+                console.warn(`Value exceeds max reasonable limit: ${parsed}, capping to 0`);
+                return 0; // Cap unreasonably large values
+            }
+            if (parsed < 0) {
+                console.warn(`Negative value provided: ${parsed}, converting to 0`);
+                return 0; // Reject negative values
+            }
+            return parsed;
         };
+        
+        const formData = {
+            basic_salary: parseAndValidate(document.getElementById('basicSalary')?.value),
+            hra: parseAndValidate(document.getElementById('hra')?.value),
+            special_allowance: parseAndValidate(document.getElementById('specialAllowance')?.value),
+            other_allowances: parseAndValidate(document.getElementById('otherAllowances')?.value),
+            section_80c: parseAndValidate(document.getElementById('section80c')?.value),
+            section_80d: parseAndValidate(document.getElementById('section80d')?.value),
+            section_24: parseAndValidate(document.getElementById('section24')?.value),
+            tds_deducted: parseAndValidate(document.getElementById('tdsDeducted')?.value),
+            // Additional fields not yet in form (default to 0)
+            bonus: 0,
+            rent_paid: 0,
+            city: '',
+            is_metro: false,
+            interest_income: 0,
+            rental_income: 0,
+            capital_gains: 0,
+            other_income: 0,
+            section_80g: 0,
+            section_80e: 0,
+            section_80ccd1b: 0,
+            section_80tta: 0,
+            standard_deduction: 50000,
+            professional_tax: 0,
+            advance_tax: 0
+        };
+        console.log("DEBUG: getFormData() returning:", formData);
+        return formData;
     }
 
     updateResultsDisplay(result) {
@@ -736,6 +855,165 @@ class TaxFilingApp {
         toast.textContent = message;
         toastContainer.appendChild(toast);
         setTimeout(() => toast.remove(), 5000);
+    }
+
+    showExportOptions() {
+        // Check if tax calculation has been performed
+        if (!this.currentTaxCalculation) {
+            this.showToast('Please calculate tax first before exporting', 'warning');
+            return;
+        }
+
+        // Create modal for export format selection
+        const modal = document.createElement('div');
+        modal.className = 'export-modal-overlay';
+        modal.id = 'exportModal';
+        modal.innerHTML = `
+            <div class="export-modal">
+                <div class="export-modal-header">
+                    <h3>Export Tax Summary</h3>
+                    <button class="export-modal-close" onclick="this.closest('.export-modal-overlay').remove()">×</button>
+                </div>
+                <div class="export-modal-body">
+                    <p class="export-description">Choose a format to download your ITR-compatible tax summary:</p>
+                    <div class="export-options">
+                        <button class="export-option-btn pdf-btn" onclick="app.exportTaxSummary('pdf')">
+                            <span class="export-icon">📄</span>
+                            <div class="export-option-content">
+                                <h4>PDF Document</h4>
+                                <p>Professional format ready for filing</p>
+                            </div>
+                        </button>
+                        <button class="export-option-btn csv-btn" onclick="app.exportTaxSummary('csv')">
+                            <span class="export-icon">📊</span>
+                            <div class="export-option-content">
+                                <h4>CSV Spreadsheet</h4>
+                                <p>Editable format for portal import</p>
+                            </div>
+                        </button>
+                        <button class="export-option-btn excel-btn" onclick="app.exportTaxSummary('excel')">
+                            <span class="export-icon">📗</span>
+                            <div class="export-option-content">
+                                <h4>Excel File</h4>
+                                <p>Formatted spreadsheet with styles</p>
+                            </div>
+                        </button>
+                        <button class="export-option-btn json-btn" onclick="app.exportTaxSummary('json')">
+                            <span class="export-icon">📋</span>
+                            <div class="export-option-content">
+                                <h4>JSON Data</h4>
+                                <p>Structured format for integration</p>
+                            </div>
+                        </button>
+                    </div>
+                    <div class="export-info-box">
+                        <p><strong>ℹ️ Note:</strong> This summary is in ITR (Income Tax Return) filing format compatible with the Income Tax Department's e-filing portal.</p>
+                        <p>Please review all details with your Chartered Accountant before official filing.</p>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        
+        // Close modal when clicking overlay
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.remove();
+            }
+        });
+    }
+
+    async exportTaxSummary(format) {
+        try {
+            this.showLoadingOverlay(`Generating ${format.toUpperCase()} export...`);
+            
+            // Prepare data for export
+            const exportData = {
+                format: format,
+                financial_data: this.getFormData(),
+                tax_calculation: this.currentTaxCalculation,
+                user_info: this.getUserInfo(),
+                assessment_year: this.getAssessmentYear()
+            };
+
+            // Call backend API
+            const response = await fetch(`${this.backendUrl}/api/export-tax-summary`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(exportData)
+            });
+
+            if (!response.ok) {
+                throw new Error(`Export failed: ${response.statusText}`);
+            }
+
+            // Handle different response types
+            if (format === 'json') {
+                const jsonData = await response.json();
+                this.downloadJSON(jsonData);
+                this.showToast('Tax summary exported as JSON successfully', 'success');
+            } else if (format === 'pdf') {
+                const blob = await response.blob();
+                this.downloadFile(blob, `ITR_Summary_${this.getAssessmentYear()}.pdf`, 'application/pdf');
+                this.showToast('Tax summary exported as PDF successfully', 'success');
+            } else if (format === 'csv') {
+                const blob = await response.blob();
+                this.downloadFile(blob, `ITR_Summary_${this.getAssessmentYear()}.csv`, 'text/csv');
+                this.showToast('Tax summary exported as CSV successfully', 'success');
+            } else if (format === 'excel') {
+                const blob = await response.blob();
+                this.downloadFile(blob, `ITR_Summary_${this.getAssessmentYear()}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+                this.showToast('Tax summary exported as Excel successfully', 'success');
+            }
+
+            // Close modal
+            const modal = document.getElementById('exportModal');
+            if (modal) modal.remove();
+
+        } catch (error) {
+            console.error('Export error:', error);
+            this.showToast(`Export failed: ${error.message}`, 'error');
+        } finally {
+            this.hideLoadingOverlay();
+        }
+    }
+
+    downloadFile(blob, filename, mimeType) {
+        const url = window.URL.createObjectURL(new Blob([blob], { type: mimeType }));
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+    }
+
+    downloadJSON(data) {
+        const jsonString = JSON.stringify(data, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        this.downloadFile(blob, `ITR_Summary_${this.getAssessmentYear()}.json`, 'application/json');
+    }
+
+    getUserInfo() {
+        // Get user information - can be extended to get from profile section
+        return {
+            name: localStorage.getItem('userName') || '[Taxpayer Name]',
+            pan: localStorage.getItem('userPAN') || '[PAN]',
+            aadhar: localStorage.getItem('userAadhar') || '[Aadhar No.]',
+            dob: localStorage.getItem('userDOB') || '[DOB]',
+            address: localStorage.getItem('userAddress') || '[Address]',
+            email: localStorage.getItem('userEmail') || '[Email]',
+            mobile: localStorage.getItem('userMobile') || '[Mobile]',
+            residential_status: 'Resident'
+        };
+    }
+
+    getAssessmentYear() {
+        // Return current assessment year (AY 2024-25 for FY 2023-24)
+        const currentYear = new Date().getFullYear();
+        return `2024-25`;
     }
 }
 

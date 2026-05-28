@@ -64,6 +64,10 @@ class TaxCalculatorService:
 
         # Calculate gross income
         gross_income = financial_data.total_income
+        logger.info(f"DEBUG: Calculating {regime.value} regime tax")
+        logger.info(f"DEBUG: Gross income: {gross_income}")
+        logger.info(f"DEBUG: Salary breakdown: basic={financial_data.basic_salary}, hra={financial_data.hra}, special={financial_data.special_allowance}")
+        logger.info(f"DEBUG: Other income: interest={financial_data.interest_income}, rental={financial_data.rental_income}, capital_gains={financial_data.capital_gains}")
 
         # Calculate deductions based on regime
         if regime == TaxRegime.OLD:
@@ -71,8 +75,11 @@ class TaxCalculatorService:
         else:
             total_deductions = self._calculate_new_regime_deductions(financial_data)
 
+        logger.info(f"DEBUG: Total deductions for {regime.value} regime: {total_deductions}")
+
         # Calculate taxable income
         taxable_income = max(0, gross_income - total_deductions)
+        logger.info(f"DEBUG: Taxable income: {taxable_income}")
 
         # Get tax slabs for the regime
         tax_slabs = self.get_tax_slabs(regime.value, assessment_year)
@@ -82,16 +89,19 @@ class TaxCalculatorService:
 
         # Calculate cess (4% of income tax)
         cess = tax_calculation["total_tax"] * self.cess_rate
+        logger.info(f"DEBUG: Tax before cess: {tax_calculation['total_tax']}, Cess (4%): {cess}")
 
         # Total tax including cess
         total_tax = tax_calculation["total_tax"] + cess
 
         # Calculate effective tax rate
         effective_tax_rate = (total_tax / gross_income * 100) if gross_income > 0 else 0
+        logger.info(f"DEBUG: Total tax: {total_tax}, Effective rate: {effective_tax_rate}%")
 
         # Calculate refund/payable
         taxes_paid = financial_data.tds_deducted + financial_data.advance_tax
         refund_or_payable = total_tax - taxes_paid
+        logger.info(f"DEBUG: TDS: {financial_data.tds_deducted}, Advance tax: {financial_data.advance_tax}, Refund/Payable: {refund_or_payable}")
 
         return RegimeTaxDetails(
             regime=regime,
@@ -187,6 +197,10 @@ class TaxCalculatorService:
         slab_details = []
         remaining_income = taxable_income
 
+        # DEBUG: Log input values
+        logger.info(f"DEBUG: _calculate_slab_tax called with taxable_income={taxable_income}")
+        logger.info(f"DEBUG: Tax slabs: {tax_slabs}")
+
         for slab in tax_slabs:
             min_amount = slab["min"]
             max_amount = slab["max"] if slab["max"] else float('inf')
@@ -196,12 +210,19 @@ class TaxCalculatorService:
                 break
 
             # Calculate taxable amount in this slab
-            slab_range = max_amount - min_amount if max_amount != float('inf') else remaining_income
+            # The slab_range is the width of the bracket
+            if max_amount == float('inf'):
+                slab_range = remaining_income  # All remaining goes to this bracket
+            else:
+                slab_range = max_amount - min_amount
+            
             slab_taxable = min(remaining_income, slab_range)
 
             # Calculate tax for this slab
             slab_tax = slab_taxable * (rate / 100)
             total_tax += slab_tax
+
+            logger.info(f"DEBUG: Slab {min_amount}-{max_amount}: rate={rate}%, taxable={slab_taxable}, tax={slab_tax}")
 
             # Add to slab details
             slab_details.append(TaxSlabDetail(
@@ -215,6 +236,8 @@ class TaxCalculatorService:
 
             if remaining_income <= 0 or max_amount == float('inf'):
                 break
+
+        logger.info(f"DEBUG: Total tax calculated: {total_tax}")
 
         return {
             "total_tax": total_tax,

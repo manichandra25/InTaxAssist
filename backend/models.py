@@ -11,40 +11,61 @@ class TaxRegime(str, Enum):
 class FinancialData(BaseModel):
     """Financial data model for tax calculations"""
 
-    # Income components
-    basic_salary: float = Field(default=0, ge=0, description="Basic salary amount")
-    hra: float = Field(default=0, ge=0, description="House Rent Allowance")
-    special_allowance: float = Field(default=0, ge=0, description="Special allowance")
-    other_allowances: float = Field(default=0, ge=0, description="Other allowances")
-    bonus: float = Field(default=0, ge=0, description="Bonus amount")
+    # Income components - with reasonable upper limits to prevent document extraction errors
+    basic_salary: float = Field(default=0, ge=0, le=50000000, description="Basic salary amount (max ₹5 crore)")
+    hra: float = Field(default=0, ge=0, le=10000000, description="House Rent Allowance (max ₹1 crore)")
+    special_allowance: float = Field(default=0, ge=0, le=10000000, description="Special allowance (max ₹1 crore)")
+    other_allowances: float = Field(default=0, ge=0, le=10000000, description="Other allowances (max ₹1 crore)")
+    bonus: float = Field(default=0, ge=0, le=20000000, description="Bonus amount (max ₹2 crore)")
     
     # HRA related fields
-    rent_paid: float = Field(default=0, ge=0, description="Annual rent paid")
+    rent_paid: float = Field(default=0, ge=0, le=5000000, description="Annual rent paid (max ₹50L)")
     city: Optional[str] = Field(default=None, description="City of residence for HRA calculation")
     is_metro: bool = Field(default=False, description="Whether residence is in a metro city")
 
     # Other income sources
-    interest_income: float = Field(default=0, ge=0, description="Interest from savings/FD")
-    rental_income: float = Field(default=0, ge=0, description="Rental income")
-    capital_gains: float = Field(default=0, ge=0, description="Capital gains")
-    other_income: float = Field(default=0, ge=0, description="Other sources of income")
+    interest_income: float = Field(default=0, ge=0, le=5000000, description="Interest from savings/FD (max ₹50L)")
+    rental_income: float = Field(default=0, ge=0, le=50000000, description="Rental income (max ₹5 crore)")
+    capital_gains: float = Field(default=0, ge=0, le=50000000, description="Capital gains (max ₹5 crore)")
+    other_income: float = Field(default=0, ge=0, le=10000000, description="Other sources of income (max ₹1 crore)")
 
     # Deductions under old regime
     section_80c: float = Field(default=0, ge=0, le=150000, description="80C deductions (max ₹1.5L)")
-    section_80d: float = Field(default=0, ge=0, le=25000, description="80D medical insurance (max ₹25K)")
-    section_80g: float = Field(default=0, ge=0, description="80G donations")
-    section_24: float = Field(default=0, ge=0, description="24 home loan interest")
-    section_80ccd1b: float = Field(default=0, ge=0, le=50000, description="NPS additional ₹50K")
-    section_80e: float = Field(default=0, ge=0, description="Education loan interest")
-    section_80tta: float = Field(default=0, ge=0, le=10000, description="Interest on savings account")
+    section_80d: float = Field(default=0, ge=0, le=100000, description="80D medical insurance (max ₹1L)")
+    section_80g: float = Field(default=0, ge=0, le=5000000, description="80G donations (max ₹50L)")
+    section_24: float = Field(default=0, ge=0, le=5000000, description="24 home loan interest (max ₹50L)")
+    section_80ccd1b: float = Field(default=0, ge=0, le=50000, description="NPS additional ₹50K (max ₹50K)")
+    section_80e: float = Field(default=0, ge=0, le=5000000, description="Education loan interest (max ₹50L)")
+    section_80tta: float = Field(default=0, ge=0, le=10000, description="Interest on savings account (max ₹10K)")
 
     # Common deductions
     standard_deduction: float = Field(default=50000, description="Standard deduction")
-    professional_tax: float = Field(default=0, ge=0, le=2500, description="Professional tax")
+    professional_tax: float = Field(default=0, ge=0, le=2500, description="Professional tax (max ₹2.5K)")
 
     # Tax payments
-    tds_deducted: float = Field(default=0, ge=0, description="TDS already deducted")
-    advance_tax: float = Field(default=0, ge=0, description="Advance tax paid")
+    tds_deducted: float = Field(default=0, ge=0, le=50000000, description="TDS already deducted (max ₹5 crore)")
+    advance_tax: float = Field(default=0, ge=0, le=50000000, description="Advance tax paid (max ₹5 crore)")
+
+    @field_validator('basic_salary', mode='after')
+    def validate_basic_salary(cls, v):
+        """Ensure basic salary is within reasonable limits"""
+        if v > 50000000:  # > ₹5 crore
+            raise ValueError(f'Basic salary {v:,.0f} exceeds maximum limit of ₹5 crore')
+        return min(v, 50000000)
+    
+    @field_validator('hra', mode='after')
+    def validate_hra(cls, v):
+        """Ensure HRA is within reasonable limits"""
+        if v > 10000000:  # > ₹1 crore
+            raise ValueError(f'HRA {v:,.0f} exceeds maximum limit of ₹1 crore')
+        return min(v, 10000000)
+    
+    @field_validator('tds_deducted', 'advance_tax', mode='after')
+    def validate_tax_payments(cls, v):
+        """Ensure tax payments are within reasonable limits"""
+        if v > 50000000:  # > ₹5 crore
+            raise ValueError(f'Tax payment {v:,.0f} exceeds maximum limit of ₹5 crore')
+        return min(v, 50000000)
 
     @field_validator('section_80c')
     def validate_80c_limit(cls, v):

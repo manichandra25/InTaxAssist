@@ -132,6 +132,50 @@ From the following document text, extract the financial values and return ONLY a
         
         return clean_text
 
+    def _normalize_numeric_string(self, value: str) -> float:
+        """Normalize numeric strings to a float.
+
+        Handles numbers with commas and multiple dots from OCR (e.g. '1,234,567',
+        '1.234.567', '589,097.496', '1.968.885.504'). Strategy:
+        - Remove any non-digit, non-comma, non-dot characters
+        - If there are both commas and dots, assume commas are thousand separators and remove them
+        - If there are multiple dots (e.g. '1.968.885.504'), treat all but the last dot as thousand separators
+        - Finally, convert to float. On failure return 0.0
+        """
+        if value is None:
+            return 0.0
+        try:
+            s = str(value).strip()
+            # Keep only digits, dots and commas
+            s = re.sub(r"[^0-9\.,]", "", s)
+            if s == "":
+                return 0.0
+
+            # If both comma and dot present, assume comma thousands, dot decimal
+            if ',' in s and '.' in s:
+                s = s.replace(',', '')
+                return float(s)
+
+            # If only commas present, remove them (they are thousand separators)
+            if ',' in s and '.' not in s:
+                s = s.replace(',', '')
+                return float(s)
+
+            # If only dots present, could be thousand separators or decimal
+            # If more than one dot, treat all but last as thousand separators
+            if s.count('.') > 1:
+                parts = s.split('.')
+                # join all but last as integer part, keep last as decimal
+                integer_part = ''.join(parts[:-1])
+                decimal_part = parts[-1]
+                normalized = integer_part + '.' + decimal_part
+                return float(normalized)
+
+            # Otherwise safe to convert
+            return float(s)
+        except Exception:
+            return 0.0
+
     async def parse_document(
         self,
         file_content: bytes,
@@ -248,7 +292,20 @@ From the following document text, extract the financial values and return ONLY a
         for field, default_value in expected_fields.items():
             value = data.get(field, default_value)
             try:
-                validated_data[field] = max(0, float(value))
+                # Normalize numeric strings (remove separators, handle OCR dots)
+                normalized = self._normalize_numeric_string(value)
+                # Clamp values to reasonable maximums to avoid corruption
+                if field == 'basic_salary' and normalized > 50000000:
+                    logger.warning(f"Extracted basic_salary {normalized} exceeds allowed maximum; resetting to 0")
+                    validated_data[field] = 0
+                elif field == 'hra' and normalized > 10000000:
+                    logger.warning(f"Extracted hra {normalized} exceeds allowed maximum; resetting to 0")
+                    validated_data[field] = 0
+                elif field in ('tds_deducted',) and normalized > 50000000:
+                    logger.warning(f"Extracted {field} {normalized} exceeds allowed maximum; resetting to 0")
+                    validated_data[field] = 0
+                else:
+                    validated_data[field] = max(0.0, normalized)
             except (ValueError, TypeError):
                 validated_data[field] = default_value
         return validated_data
@@ -271,7 +328,18 @@ From the following document text, extract the financial values and return ONLY a
                 match = re.search(pattern, text_lower, re.IGNORECASE)
                 if match:
                     try:
-                        value = float(match.group(1).replace(',', ''))
+                        raw = match.group(1)
+                        value = self._normalize_numeric_string(raw)
+                        # Clamp known fields to reasonable maxima to avoid extraction corruption
+                        if field == 'basic_salary' and value > 50000000:
+                            logger.warning(f"Rule-based extracted basic_salary {value} exceeds allowed maximum; resetting to 0")
+                            value = 0
+                        if field == 'hra' and value > 10000000:
+                            logger.warning(f"Rule-based extracted hra {value} exceeds allowed maximum; resetting to 0")
+                            value = 0
+                        if field == 'tds_deducted' and value > 50000000:
+                            logger.warning(f"Rule-based extracted tds_deducted {value} exceeds allowed maximum; resetting to 0")
+                            value = 0
                         break
                     except (ValueError, AttributeError):
                         continue
